@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -310,6 +311,9 @@ export default function QueuePage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Queue</DialogTitle>
+            <DialogDescription>
+              Group related posts together for easy management and batch scheduling.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
