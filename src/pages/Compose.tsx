@@ -21,6 +21,8 @@ import {
   Plus,
   ChevronDown,
   Server,
+  Download,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +48,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ImageUploader } from '@/components/ImageUploader';
+import { ImportListingDialog } from '@/components/ImportListingDialog';
+import { AiGenerateDialog } from '@/components/AiGenerateDialog';
 import { useScheduler } from '@/contexts/SchedulerContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
@@ -283,6 +287,32 @@ export default function Compose() {
     setPersisted(false);
   }, [post, user]);
 
+  // Import data from an existing Nostr event (NIP-99 listing or NIP-23 article)
+  const handleImport = useCallback((data: Partial<SchedulerPost>) => {
+    setPost(prev => {
+      const updated = { ...prev };
+      if (data.content !== undefined) updated.content = data.content;
+      if (data.dTag !== undefined) updated.dTag = data.dTag;
+      if (data.listingFields && updated.listingFields) {
+        updated.listingFields = { ...updated.listingFields, ...data.listingFields };
+      }
+      if (data.articleFields && updated.articleFields) {
+        updated.articleFields = { ...updated.articleFields, ...data.articleFields };
+      }
+      return updated;
+    });
+    toast({ title: 'Imported!', description: 'All fields have been auto-filled from your existing event.' });
+  }, [toast]);
+
+  // Insert AI-generated content into the content field
+  const handleAiInsert = useCallback((text: string) => {
+    setPost(prev => ({
+      ...prev,
+      content: prev.content ? prev.content + '\n\n' + text : text,
+    }));
+    toast({ title: 'Content inserted', description: 'AI-generated text added to your content.' });
+  }, [toast]);
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -314,11 +344,22 @@ export default function Compose() {
             {post.kind === 'article' && 'Long-form article (NIP-23, kind 30023)'}
           </p>
         </div>
-        {post.status !== 'draft' && (
-          <Badge variant={post.status === 'scheduled' ? 'default' : post.status === 'published' ? 'outline' : 'destructive'}>
-            {post.status}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {post.status !== 'draft' && (
+            <Badge variant={post.status === 'scheduled' ? 'default' : post.status === 'published' ? 'outline' : 'destructive'}>
+              {post.status}
+            </Badge>
+          )}
+          {/* Import from Nostr — only for listings & articles */}
+          {(post.kind === 'listing' || post.kind === 'article') && (
+            <ImportListingDialog postKind={post.kind} onImport={handleImport}>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Import</span>
+              </Button>
+            </ImportListingDialog>
+          )}
+        </div>
       </div>
 
       {/* Kind selector (only when creating new) */}
@@ -511,9 +552,32 @@ export default function Compose() {
           {/* Content editor */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                {post.kind === 'note' ? 'Note Content' : 'Description (Markdown)'}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">
+                  {post.kind === 'note' ? 'Note Content' : 'Description (Markdown)'}
+                </CardTitle>
+                <AiGenerateDialog
+                  postKind={post.kind}
+                  currentContent={post.content}
+                  listingTitle={post.kind === 'listing' ? post.listingFields?.title : post.kind === 'article' ? post.articleFields?.title : undefined}
+                  listingContext={
+                    post.kind === 'listing' && post.listingFields
+                      ? [
+                          post.listingFields.summary && `Summary: ${post.listingFields.summary}`,
+                          post.listingFields.price && `Price: ${post.listingFields.price} ${post.listingFields.currency}`,
+                          post.listingFields.location && `Location: ${post.listingFields.location}`,
+                          post.listingFields.categories.length > 0 && `Categories: ${post.listingFields.categories.join(', ')}`,
+                        ].filter(Boolean).join('. ')
+                      : undefined
+                  }
+                  onInsert={handleAiInsert}
+                >
+                  <Button variant="outline" size="sm" className="gap-2 text-xs">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI Generate
+                  </Button>
+                </AiGenerateDialog>
+              </div>
             </CardHeader>
             <CardContent>
               <Textarea

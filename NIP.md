@@ -39,6 +39,10 @@ Relay configuration is synced via NIP-65. The scheduler reads and writes relay p
 
 ### NIP-90 — Data Vending Machine (DVM)
 
+The scheduler uses two DVM job types:
+
+#### Delegated Publishing (kind 5905)
+
 For delegated publishing, the scheduler creates job requests:
 
 - **kind 5905** — Job request to publish a scheduled event
@@ -62,6 +66,31 @@ For delegated publishing, the scheduler creates job requests:
 ```
 
 Job results would be **kind 6905** from the DVM service provider.
+
+#### AI Text Generation (kind 5050)
+
+For AI-assisted content generation, the scheduler publishes text generation job requests to DVM service providers:
+
+- **kind 5050** — Job request for AI text generation
+  - Input: A prompt describing what content to generate
+  - Params: `max_tokens`, `temperature`
+  - Output: `text/plain`
+
+```json
+{
+  "kind": 5050,
+  "content": "",
+  "tags": [
+    ["i", "Write a compelling product description for...", "text"],
+    ["output", "text/plain"],
+    ["param", "max_tokens", "1024"],
+    ["param", "temperature", "0.7"],
+    ["alt", "NIP-90 Text Generation request"]
+  ]
+}
+```
+
+Job results are **kind 6050** from the DVM service provider, with the generated text in the `content` field. Job feedback events (**kind 7000**) may indicate processing status or errors.
 
 ### NIP-92 — Media Attachments
 
@@ -90,6 +119,15 @@ Optional tags: `summary`, `price`, `location`, `status`, `t`, `image`, `imeta`, 
 
 - Currency: ISO 4217 or crypto codes (BTC, SAT, USD, EUR, etc.)
 - Frequency: Optional (hour, day, week, month, year)
+
+## Import from Nostr
+
+The scheduler can import existing published events from Nostr relays to auto-fill the compose form:
+
+- **kind 30402** (NIP-99) — Import existing classified listings with title, description, price, images, categories, and all metadata
+- **kind 30023** (NIP-23) — Import existing long-form articles with title, summary, cover image, and content
+
+Events are queried using `authors: [user.pubkey]` to ensure only the logged-in user's own events are fetched. Imported data populates all relevant form fields, including image URLs from both `image` and `imeta` tags.
 
 ## Local Storage Schema
 
