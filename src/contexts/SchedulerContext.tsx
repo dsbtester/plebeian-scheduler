@@ -1,16 +1,23 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import type { SchedulerPost, Queue, PostKind, PostStatus } from '@/lib/types';
 import { createNewPost } from '@/lib/types';
 import {
-  loadPosts, savePosts, upsertPost as storeUpsert, deletePost as storeDelete,
+  loadPosts, savePosts,
   loadQueues, saveQueues,
-  getStats,
 } from '@/lib/schedulerStore';
+
+interface Stats {
+  drafts: number;
+  scheduled: number;
+  queued: number;
+  published: number;
+  failed: number;
+}
 
 interface SchedulerContextValue {
   posts: SchedulerPost[];
   queues: Queue[];
-  stats: ReturnType<typeof getStats>;
+  stats: Stats;
   createPost: (kind: PostKind, authorPubkey: string) => SchedulerPost;
   updatePost: (post: SchedulerPost) => void;
   removePost: (id: string) => void;
@@ -32,7 +39,14 @@ export function SchedulerProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<SchedulerPost[]>(() => loadPosts());
   const [queues, setQueues] = useState<Queue[]>(() => loadQueues());
 
-  const stats = getStats();
+  // Compute stats from the reactive state
+  const stats = useMemo<Stats>(() => ({
+    drafts: posts.filter(p => p.status === 'draft').length,
+    scheduled: posts.filter(p => p.status === 'scheduled').length,
+    queued: posts.filter(p => p.status === 'queued').length,
+    published: posts.filter(p => p.status === 'published').length,
+    failed: posts.filter(p => p.status === 'failed').length,
+  }), [posts]);
 
   // Sync to localStorage when posts change
   useEffect(() => {
@@ -68,7 +82,6 @@ export function SchedulerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removePost = useCallback((id: string) => {
-    storeDelete(id);
     setPosts(prev => prev.filter(p => p.id !== id));
   }, []);
 
@@ -87,15 +100,12 @@ export function SchedulerProvider({ children }: { children: ReactNode }) {
   }, [posts]);
 
   const schedulePost = useCallback((id: string, scheduledAt: number) => {
-    setPosts(prev => {
-      const next = prev.map(p => {
-        if (p.id === id) {
-          return { ...p, status: 'scheduled' as PostStatus, scheduledAt, updatedAt: Math.floor(Date.now() / 1000) };
-        }
-        return p;
-      });
-      return next;
-    });
+    setPosts(prev => prev.map(p => {
+      if (p.id === id) {
+        return { ...p, status: 'scheduled' as PostStatus, scheduledAt, updatedAt: Math.floor(Date.now() / 1000) };
+      }
+      return p;
+    }));
   }, []);
 
   const markPublished = useCallback((id: string, eventId: string) => {
@@ -156,32 +166,27 @@ export function SchedulerProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  // Persist on every update
-  useEffect(() => {
-    storeUpsert;
-  }, []);
+  const contextValue = useMemo<SchedulerContextValue>(() => ({
+    posts,
+    queues,
+    stats,
+    createPost,
+    updatePost,
+    removePost,
+    getPost,
+    getPostsByStatus: getPostsByStatusFn,
+    getPostsByQueue: getPostsByQueueFn,
+    schedulePost,
+    markPublished,
+    markFailed,
+    addQueue: addQueueFn,
+    removeQueue: removeQueueFn,
+    reorderQueue,
+    refreshPosts,
+  }), [posts, queues, stats, createPost, updatePost, removePost, getPost, getPostsByStatusFn, getPostsByQueueFn, schedulePost, markPublished, markFailed, addQueueFn, removeQueueFn, reorderQueue, refreshPosts]);
 
   return (
-    <SchedulerContext.Provider
-      value={{
-        posts,
-        queues,
-        stats,
-        createPost,
-        updatePost,
-        removePost,
-        getPost,
-        getPostsByStatus: getPostsByStatusFn,
-        getPostsByQueue: getPostsByQueueFn,
-        schedulePost,
-        markPublished,
-        markFailed,
-        addQueue: addQueueFn,
-        removeQueue: removeQueueFn,
-        reorderQueue,
-        refreshPosts,
-      }}
-    >
+    <SchedulerContext.Provider value={contextValue}>
       {children}
     </SchedulerContext.Provider>
   );

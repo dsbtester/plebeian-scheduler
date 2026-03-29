@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSeoMeta } from '@unhead/react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
@@ -84,9 +84,11 @@ export default function Compose() {
   const [newCategory, setNewCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize post
+  // Initialize post - only run once on mount or when edit ID / user changes
+  const initializedRef = useRef(false);
   useEffect(() => {
     if (!user) return;
+    if (initializedRef.current) return;
 
     if (editId) {
       const existing = getPost(editId);
@@ -98,12 +100,14 @@ export default function Compose() {
           setScheduleTime(format(d, 'HH:mm'));
           setShowScheduler(true);
         }
+        initializedRef.current = true;
         return;
       }
     }
 
     const newPost = createPost(initialKind, user.pubkey);
     setPost(newPost);
+    initializedRef.current = true;
   }, [user, editId, initialKind, createPost, getPost]);
 
   const updateField = useCallback(<K extends keyof SchedulerPost>(field: K, value: SchedulerPost[K]) => {
