@@ -40,6 +40,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   handleReset = () => {
+    // Clear potentially corrupted scheduler data from a previous crash
+    try {
+      localStorage.removeItem('plebeian-scheduler:posts');
+      localStorage.removeItem('plebeian-scheduler:queues');
+    } catch {
+      // Ignore localStorage errors
+    }
     this.setState({
       hasError: false,
       error: null,
@@ -91,7 +98,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
             <div className="flex gap-2">
               <button
-                onClick={this.handleReset}
+                onClick={() => {
+                  // Clear potentially corrupted scheduler data
+                  try {
+                    localStorage.removeItem('plebeian-scheduler:posts');
+                    localStorage.removeItem('plebeian-scheduler:queues');
+                  } catch { /* ignore */ }
+                  // Navigate to home and force full reload
+                  window.location.href = '/';
+                }}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
               >
                 Try again

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useSeoMeta } from '@unhead/react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
@@ -51,7 +51,11 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
 import { buildEvent, buildDvmPublishRequest } from '@/lib/eventBuilder';
-import { CURRENCIES, PRICE_FREQUENCIES, type PostKind, type SchedulerPost, type Currency, type PriceFrequency, type ListingStatus } from '@/lib/types';
+import {
+  CURRENCIES, PRICE_FREQUENCIES,
+  createNewPost,
+  type PostKind, type SchedulerPost, type Currency, type PriceFrequency, type ListingStatus,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -71,71 +75,65 @@ export default function Compose() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useCurrentUser();
-  const { createPost, updatePost, removePost, getPost } = useScheduler();
+  const { updatePost, removePost, posts } = useScheduler();
   const { mutateAsync: publishEvent, isPending: isPublishing } = useNostrPublish();
 
   const editId = searchParams.get('edit');
   const initialKind = (searchParams.get('kind') as PostKind) || 'listing';
 
-  const [post, setPost] = useState<SchedulerPost | null>(null);
-  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
-  const [scheduleTime, setScheduleTime] = useState('12:00');
-  const [showScheduler, setShowScheduler] = useState(false);
+  // Find existing post from the store if editing — no useEffect needed
+  const existingPost = useMemo(() => {
+    if (editId) {
+      return posts.find(p => p.id === editId);
+    }
+    return undefined;
+  }, [editId, posts]);
+
+  // Local post state — initialized synchronously, no side effects
+  const [post, setPost] = useState<SchedulerPost>(() => {
+    if (existingPost) return existingPost;
+    return createNewPost(initialKind, user?.pubkey ?? '');
+  });
+
+  // Track whether we've persisted this new post to the store yet
+  const [persisted, setPersisted] = useState(!!editId);
+
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(() => {
+    if (existingPost?.scheduledAt) {
+      return new Date(existingPost.scheduledAt * 1000);
+    }
+    return undefined;
+  });
+  const [scheduleTime, setScheduleTime] = useState(() => {
+    if (existingPost?.scheduledAt) {
+      return format(new Date(existingPost.scheduledAt * 1000), 'HH:mm');
+    }
+    return '12:00';
+  });
+  const [showScheduler, setShowScheduler] = useState(!!existingPost?.scheduledAt);
   const [newCategory, setNewCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize post - only run once on mount or when edit ID / user changes
-  const initializedRef = useRef(false);
-  useEffect(() => {
-    if (!user) return;
-    if (initializedRef.current) return;
-
-    if (editId) {
-      const existing = getPost(editId);
-      if (existing) {
-        setPost(existing);
-        if (existing.scheduledAt) {
-          const d = new Date(existing.scheduledAt * 1000);
-          setScheduleDate(d);
-          setScheduleTime(format(d, 'HH:mm'));
-          setShowScheduler(true);
-        }
-        initializedRef.current = true;
-        return;
-      }
-    }
-
-    const newPost = createPost(initialKind, user.pubkey);
-    setPost(newPost);
-    initializedRef.current = true;
-  }, [user, editId, initialKind, createPost, getPost]);
-
   const updateField = useCallback(<K extends keyof SchedulerPost>(field: K, value: SchedulerPost[K]) => {
-    setPost(prev => prev ? { ...prev, [field]: value } : null);
+    setPost(prev => ({ ...prev, [field]: value }));
   }, []);
 
   const updateListingField = useCallback((field: string, value: string | string[]) => {
     setPost(prev => {
-      if (!prev?.listingFields) return prev;
-      return {
-        ...prev,
-        listingFields: { ...prev.listingFields, [field]: value },
-      };
+      if (!prev.listingFields) return prev;
+      return { ...prev, listingFields: { ...prev.listingFields, [field]: value } };
     });
   }, []);
 
   const updateArticleField = useCallback((field: string, value: string | string[]) => {
     setPost(prev => {
-      if (!prev?.articleFields) return prev;
-      return {
-        ...prev,
-        articleFields: { ...prev.articleFields, [field]: value },
-      };
+      if (!prev.articleFields) return prev;
+      return { ...prev, articleFields: { ...prev.articleFields, [field]: value } };
     });
   }, []);
 
   const addCategory = useCallback(() => {
-    if (!newCategory.trim() || !post) return;
+    if (!newCategory.trim()) return;
     const cats = post.kind === 'listing'
       ? post.listingFields?.categories ?? []
       : post.articleFields?.categories ?? [];
@@ -151,7 +149,6 @@ export default function Compose() {
   }, [newCategory, post, updateListingField, updateArticleField]);
 
   const removeCategory = useCallback((cat: string) => {
-    if (!post) return;
     if (post.kind === 'listing') {
       updateListingField('categories', (post.listingFields?.categories ?? []).filter(c => c !== cat));
     } else {
@@ -159,20 +156,20 @@ export default function Compose() {
     }
   }, [post, updateListingField, updateArticleField]);
 
-  // Save as draft
-  const handleSaveDraft = useCallback(async () => {
-    if (!post) return;
+  // Persist to global store and save as draft
+  const handleSaveDraft = useCallback(() => {
     setIsSaving(true);
-    const updated = { ...post, status: 'draft' as const };
+    const updated = { ...post, status: 'draft' as const, authorPubkey: user?.pubkey ?? post.authorPubkey };
     updatePost(updated);
     setPost(updated);
+    setPersisted(true);
     toast({ title: 'Draft saved', description: 'Your draft has been saved locally.' });
     setIsSaving(false);
-  }, [post, updatePost, toast]);
+  }, [post, user, updatePost, toast]);
 
   // Schedule for later
-  const handleSchedule = useCallback(async () => {
-    if (!post || !scheduleDate) return;
+  const handleSchedule = useCallback(() => {
+    if (!scheduleDate) return;
 
     const [hours, minutes] = scheduleTime.split(':').map(Number);
     const scheduledDate = new Date(scheduleDate);
@@ -184,23 +181,29 @@ export default function Compose() {
       return;
     }
 
-    const updated: SchedulerPost = { ...post, status: 'scheduled', scheduledAt };
+    const updated: SchedulerPost = {
+      ...post,
+      status: 'scheduled',
+      scheduledAt,
+      authorPubkey: user?.pubkey ?? post.authorPubkey,
+    };
     updatePost(updated);
     setPost(updated);
+    setPersisted(true);
     toast({ title: 'Post scheduled', description: `Scheduled for ${format(scheduledDate, 'MMM d, yyyy h:mm a')}` });
     navigate('/');
-  }, [post, scheduleDate, scheduleTime, updatePost, toast, navigate]);
+  }, [post, scheduleDate, scheduleTime, user, updatePost, toast, navigate]);
 
   // Publish now
   const handlePublishNow = useCallback(async () => {
-    if (!post || !user) return;
+    if (!user) return;
 
     try {
-      const event = buildEvent(post, false);
+      const postToPublish = { ...post, authorPubkey: user.pubkey };
+      const event = buildEvent(postToPublish, false);
 
       if (post.useDvm) {
-        // Build DVM job request
-        const dvmRequest = buildDvmPublishRequest(post, JSON.stringify(event));
+        const dvmRequest = buildDvmPublishRequest(postToPublish, JSON.stringify(event));
         const published = await publishEvent({
           kind: dvmRequest.kind,
           content: dvmRequest.content,
@@ -208,12 +211,13 @@ export default function Compose() {
           created_at: dvmRequest.created_at,
         });
         const updated: SchedulerPost = {
-          ...post,
+          ...postToPublish,
           status: 'published',
           publishedAt: Math.floor(Date.now() / 1000),
           publishedEventId: published.id,
         };
         updatePost(updated);
+        setPersisted(true);
         toast({ title: 'DVM job submitted', description: 'Your publish job has been submitted to the DVM network.' });
       } else {
         const published = await publishEvent({
@@ -223,12 +227,13 @@ export default function Compose() {
           created_at: event.created_at,
         });
         const updated: SchedulerPost = {
-          ...post,
+          ...postToPublish,
           status: 'published',
           publishedAt: Math.floor(Date.now() / 1000),
           publishedEventId: published.id,
         };
         updatePost(updated);
+        setPersisted(true);
         toast({ title: 'Published!', description: 'Your event has been published to Nostr relays.' });
       }
       navigate('/');
@@ -236,18 +241,29 @@ export default function Compose() {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       const updated: SchedulerPost = { ...post, status: 'failed', errorMessage: errorMsg };
       updatePost(updated);
+      setPersisted(true);
       toast({ title: 'Publish failed', description: errorMsg, variant: 'destructive' });
     }
   }, [post, user, publishEvent, updatePost, toast, navigate]);
 
   const handleDelete = useCallback(() => {
-    if (!post) return;
-    removePost(post.id);
+    if (persisted) {
+      removePost(post.id);
+    }
     toast({ title: 'Post deleted' });
     navigate('/');
-  }, [post, removePost, toast, navigate]);
+  }, [post, persisted, removePost, toast, navigate]);
 
-  if (!post) {
+  // Switch kind — create a fresh local post, no global state mutation
+  const handleSwitchKind = useCallback((newKind: PostKind) => {
+    if (post.kind === newKind) return;
+    const freshPost = createNewPost(newKind, user?.pubkey ?? '');
+    freshPost.content = post.content; // preserve content across kind switches
+    setPost(freshPost);
+    setPersisted(false);
+  }, [post, user]);
+
+  if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -294,13 +310,8 @@ export default function Compose() {
             return (
               <button
                 key={opt.value}
-                onClick={() => {
-                  if (post.kind !== opt.value) {
-                    const newPost = createPost(opt.value, user?.pubkey ?? '');
-                    newPost.content = post.content;
-                    setPost(newPost);
-                  }
-                }}
+                type="button"
+                onClick={() => handleSwitchKind(opt.value)}
                 className={cn(
                   'p-4 rounded-xl border-2 transition-all duration-200 text-left',
                   isSelected
@@ -523,7 +534,7 @@ export default function Compose() {
                     onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCategory())}
                     className="flex-1"
                   />
-                  <Button variant="outline" size="sm" onClick={addCategory}>
+                  <Button type="button" variant="outline" size="sm" onClick={addCategory}>
                     <Plus className="w-4 h-4" />
                   </Button>
                 </div>
@@ -532,7 +543,7 @@ export default function Compose() {
                     {categories.map(cat => (
                       <Badge key={cat} variant="secondary" className="gap-1 pr-1">
                         {cat}
-                        <button onClick={() => removeCategory(cat)} className="hover:bg-foreground/10 rounded-full p-0.5">
+                        <button type="button" onClick={() => removeCategory(cat)} className="hover:bg-foreground/10 rounded-full p-0.5">
                           <X className="w-3 h-3" />
                         </button>
                       </Badge>
@@ -558,10 +569,10 @@ export default function Compose() {
                 images={post.kind === 'listing' ? (post.listingFields?.images ?? []) : post.media}
                 onImagesChange={imgs => {
                   if (post.kind === 'listing') {
-                    setPost(prev => prev ? {
+                    setPost(prev => ({
                       ...prev,
                       listingFields: prev.listingFields ? { ...prev.listingFields, images: imgs } : prev.listingFields,
-                    } : null);
+                    }));
                   } else {
                     updateField('media', imgs);
                   }
