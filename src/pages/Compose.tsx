@@ -334,7 +334,7 @@ export default function Compose() {
                 placeholder="Write your promotional note... e.g. 'Check out my fresh Christmas Cakes! 50,000 sats 🎄'"
                 value={post.content}
                 onChange={e => updateField('content', e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
+                className="min-h-[200px] text-sm"
                 rows={10}
               />
               <div className="flex items-center justify-between mt-2">

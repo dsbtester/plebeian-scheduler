@@ -9,8 +9,7 @@
     "test": "npm i --silent && tsc --noEmit && eslint && vitest run --reporter=dot --silent && vite build -l error && cp dist/index.html dist/404.html && echo 'All tests passed!'"
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.2.6",
-    "@fontsource-variable/outfit": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@getalby/sdk": "^5.1.1",
     "@hookform/resolvers": "^5.2.2",
     "@nostrify/nostrify": "^0.51.0",

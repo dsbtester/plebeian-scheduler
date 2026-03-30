@@ -9,7 +9,6 @@ import {
   Settings,
   Menu,
   X,
-  Zap,
   Moon,
   Sun,
 } from 'lucide-react';
@@ -20,6 +19,9 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useScheduler } from '@/contexts/SchedulerContext';
 import { useSchedulerPublish } from '@/hooks/useSchedulerPublish';
 import { cn } from '@/lib/utils';
+
+const LOGO_URL = 'https://blossom.ditto.pub/b4404a2ff1e10f618765cfe9f3d28d7f05daccb28466af50d0354021c1b18d3c.jpeg';
+const BANNER_URL = 'https://blossom.ditto.pub/464274d3c2b0c9cf737350f10c53759dce07590904c18ec8efa6d96b2ae24069.jpeg';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -64,17 +66,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
       >
         {/* Logo */}
-        <div className="p-5 border-b border-border">
+        <div className="p-4 border-b border-border">
           <Link to="/" className="flex items-center gap-3 group" onClick={() => setMobileOpen(false)}>
-            <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-shadow">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src={LOGO_URL}
+              alt="Plebeian"
+              className="w-10 h-10 rounded-lg shadow-md shadow-primary/20 group-hover:shadow-primary/40 transition-shadow"
+            />
             <div>
-              <h1 className="font-display text-lg font-bold tracking-tight leading-none">
+              <h1 className="font-display text-base font-bold tracking-tight leading-none uppercase">
                 Plebeian
               </h1>
-              <p className="text-xs text-muted-foreground font-medium tracking-wide">
-                SCHEDULER
+              <p className="text-[10px] text-muted-foreground font-medium tracking-[0.2em] uppercase mt-0.5">
+                Scheduler
               </p>
             </div>
           </Link>
@@ -105,7 +109,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 )}
               >
-                <Icon className={cn('w-4.5 h-4.5', isActive && 'text-primary')} />
+                <Icon className={cn('w-4 h-4', isActive && 'text-primary')} />
                 <span className="flex-1">{item.label}</span>
                 {badge !== null && (
                   <span className="bg-primary/15 text-primary text-xs font-semibold px-2 py-0.5 rounded-full min-w-[22px] text-center">
@@ -156,10 +160,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-display font-bold text-sm">Plebeian Scheduler</span>
+            <img src={LOGO_URL} alt="Plebeian" className="w-7 h-7 rounded-md" />
+            <span className="font-display font-bold text-sm uppercase">Plebeian Scheduler</span>
           </Link>
           <div className="w-10" />
         </header>
@@ -169,15 +171,22 @@ export function AppLayout({ children }: AppLayoutProps) {
           {user ? (
             children
           ) : (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-fade-in">
-              <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-xl shadow-primary/20">
-                <Zap className="w-10 h-10 text-white" />
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-fade-in">
+              {/* Banner */}
+              <div className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl shadow-primary/10">
+                <img
+                  src={BANNER_URL}
+                  alt="Plebeian - The Self Sovereign Marketplace"
+                  className="w-full h-auto"
+                />
               </div>
-              <div className="space-y-2">
-                <h2 className="font-display text-2xl font-bold">Welcome to Plebeian Scheduler</h2>
-                <p className="text-muted-foreground max-w-md">
-                  Import your Plebeian Market listings, craft promotional notes, and schedule them.
-                  Sign in with your Nostr identity to get started.
+
+              <div className="space-y-3">
+                <h2 className="font-display text-2xl font-bold uppercase tracking-wider">
+                  Scheduler
+                </h2>
+                <p className="text-muted-foreground max-w-md text-sm">
+                  Import your Plebeian Market listings, craft promotional notes, and schedule them to go out on Nostr.
                 </p>
               </div>
               <LoginArea className="max-w-60" />
