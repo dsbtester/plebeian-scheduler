@@ -193,12 +193,17 @@ export default function Compose() {
     updatePost(updated);
     setPost(updated);
     setPersisted(true);
-    toast({ title: 'Post scheduled', description: `Scheduled for ${format(scheduledDate, 'MMM d, yyyy h:mm a')}` });
+    toast({
+      title: 'Post scheduled',
+      description: post.useDvm
+        ? `DVM job will be submitted. Publishes ${format(scheduledDate, 'MMM d, yyyy h:mm a')}.`
+        : `Scheduled for ${format(scheduledDate, 'MMM d, yyyy h:mm a')}. Keep this tab open!`,
+    });
     navigate('/');
   }, [post, scheduleDate, scheduleTime, user, updatePost, toast, navigate]);
 
   // Quick schedule — offset in seconds from now
-  const handleQuickSchedule = useCallback((offsetSeconds: number) => {
+  const handleQuickSchedule = useCallback((offsetSeconds: number, label: string) => {
     const scheduledAt = Math.floor(Date.now() / 1000) + offsetSeconds;
     const updated: SchedulerPost = {
       ...post,
@@ -209,10 +214,11 @@ export default function Compose() {
     updatePost(updated);
     setPost(updated);
     setPersisted(true);
-    const label = offsetSeconds < 60 ? `${offsetSeconds}s` : `${Math.round(offsetSeconds / 60)} min`;
     toast({
       title: `Scheduled in ${label}`,
-      description: `Will auto-publish at ${format(new Date(scheduledAt * 1000), 'h:mm:ss a')}. Keep this tab open!`,
+      description: post.useDvm
+        ? `DVM job will be submitted. Post publishes at ${format(new Date(scheduledAt * 1000), 'MMM d, h:mm a')}.`
+        : `Will publish at ${format(new Date(scheduledAt * 1000), 'MMM d, h:mm a')}. Keep this tab open!`,
     });
     navigate('/');
   }, [post, user, updatePost, toast, navigate]);
@@ -669,15 +675,16 @@ export default function Compose() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Server className="w-4 h-4" />
-                DVM Publishing (NIP-90)
+                Offline Scheduling (NIP-90 DVM)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Delegate to DVM</p>
+                <div className="flex-1 mr-3">
+                  <p className="text-sm font-medium">Publish via DVM</p>
                   <p className="text-xs text-muted-foreground">
-                    Use a Data Vending Machine to publish on your behalf (like Shipyard)
+                    Delegates publishing to a Data Vending Machine service provider (like Shipyard).
+                    Your post will be published at the scheduled time <strong>even if you close the browser</strong>.
                   </p>
                 </div>
                 <Switch
@@ -686,16 +693,34 @@ export default function Compose() {
                 />
               </div>
 
+              {!post.useDvm && (
+                <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <strong>Browser mode:</strong> The app will publish your post when the time comes, but you must keep this tab open. If you close the browser, the post won't publish until you reopen it.
+                  </p>
+                </div>
+              )}
+
               {post.useDvm && (
-                <div className="space-y-2 pl-1">
-                  <Label className="text-xs">DVM Relay URLs (one per line)</Label>
-                  <Textarea
-                    placeholder="wss://relay.example.com"
-                    value={post.dvmRelays.join('\n')}
-                    onChange={e => updateField('dvmRelays', e.target.value.split('\n').filter(Boolean))}
-                    rows={3}
-                    className="text-xs font-mono"
-                  />
+                <div className="space-y-3">
+                  <div className="p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                      <strong>DVM mode:</strong> Your publish job will be submitted to the DVM network immediately. A service provider will publish the event at the scheduled time — you can close the browser.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">DVM Relay URLs (optional, one per line)</Label>
+                    <Textarea
+                      placeholder="wss://relay.example.com"
+                      value={post.dvmRelays.join('\n')}
+                      onChange={e => updateField('dvmRelays', e.target.value.split('\n').filter(Boolean))}
+                      rows={3}
+                      className="text-xs font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Target relays where the DVM should publish. Leave empty to use your default relays.
+                    </p>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -785,41 +810,54 @@ export default function Compose() {
                 <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-[320px] p-0" align="start">
               <div className="p-3 space-y-3">
-                {/* Quick schedule buttons for testing */}
+                {/* Quick schedule buttons */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">Quick schedule</p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => handleQuickSchedule(30)}>
-                      30 sec
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(300, '5 minutes')}>
+                      <Clock className="w-3 h-3" />
+                      5 minutes
                     </Button>
-                    <Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => handleQuickSchedule(60)}>
-                      1 min
+                    <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(3600, '1 hour')}>
+                      <Clock className="w-3 h-3" />
+                      1 hour
                     </Button>
-                    <Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => handleQuickSchedule(120)}>
-                      2 min
+                    <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(86400, '24 hours')}>
+                      <Clock className="w-3 h-3" />
+                      24 hours
+                    </Button>
+                    <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(604800, '1 week')}>
+                      <Clock className="w-3 h-3" />
+                      1 week
                     </Button>
                   </div>
                 </div>
 
                 <Separator />
 
-                <Calendar
-                  mode="single"
-                  selected={scheduleDate}
-                  onSelect={setScheduleDate}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                />
-                <div className="flex items-center gap-2 px-1">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={e => setScheduleTime(e.target.value)}
-                    className="flex-1"
+                {/* Custom date & time */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Custom date & time</p>
+                  <Calendar
+                    mode="single"
+                    selected={scheduleDate}
+                    onSelect={setScheduleDate}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    className="rounded-md border"
                   />
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <Input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={e => setScheduleTime(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
                 </div>
+
                 <Button
                   className="w-full gap-2"
                   onClick={handleSchedule}
@@ -828,7 +866,7 @@ export default function Compose() {
                   <CalendarClock className="w-4 h-4" />
                   {scheduleDate
                     ? `Schedule for ${format(scheduleDate, 'MMM d')} at ${scheduleTime}`
-                    : 'Pick a date'}
+                    : 'Pick a date & time'}
                 </Button>
               </div>
             </PopoverContent>

@@ -49,7 +49,8 @@ function buildNoteEvent(post: SchedulerPost): UnsignedEvent {
     kind: 1,
     content,
     tags,
-    created_at: post.scheduledAt ?? Math.floor(Date.now() / 1000),
+    // Always use current time — relays reject future created_at
+    created_at: Math.floor(Date.now() / 1000),
   };
 }
 
@@ -115,7 +116,8 @@ function buildListingEvent(post: SchedulerPost): UnsignedEvent {
     kind: 30402,
     content: post.content,
     tags,
-    created_at: post.scheduledAt ?? Math.floor(Date.now() / 1000),
+    // Always use current time — relays reject future created_at
+    created_at: Math.floor(Date.now() / 1000),
   };
 }
 
@@ -159,7 +161,8 @@ function buildArticleEvent(post: SchedulerPost): UnsignedEvent {
     kind: 30023,
     content: post.content,
     tags,
-    created_at: post.scheduledAt ?? Math.floor(Date.now() / 1000),
+    // Always use current time — relays reject future created_at
+    created_at: Math.floor(Date.now() / 1000),
   };
 }
 
