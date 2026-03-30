@@ -231,7 +231,7 @@ export default function SettingsPage() {
           </p>
 
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>Supported NIPs: NIP-01, NIP-07, NIP-23, NIP-40, NIP-46, NIP-90, NIP-92, NIP-99</p>
+            <p>Supported NIPs: NIP-01, NIP-07, NIP-19, NIP-40, NIP-46, NIP-90, NIP-92, NIP-99 (read)</p>
             <p>
               Vibed with{' '}
               <a

@@ -1,3 +1,6 @@
+/** The base URL for Plebeian Market listing pages */
+export const PLEBEIAN_MARKET_URL = 'https://plebeian.market';
+
 /** Status of a scheduled item in the pipeline */
 export type PostStatus = 'draft' | 'queued' | 'scheduled' | 'published' | 'failed';
 
@@ -20,6 +23,8 @@ export interface UploadedImage {
 export interface ImportedListing {
   /** The naddr or event coordinate of the original listing */
   naddr?: string;
+  /** Direct web URL to the listing on Plebeian Market (for buyers to click) */
+  marketplaceUrl?: string;
   /** Original listing title */
   title: string;
   /** Original listing summary */

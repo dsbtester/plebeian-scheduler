@@ -26,7 +26,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { NostrMetadata } from '@nostrify/nostrify';
-import type { SchedulerPost, ImportedListing, UploadedImage } from '@/lib/types';
+import { PLEBEIAN_MARKET_URL, type ImportedListing, type UploadedImage } from '@/lib/types';
 
 interface ListingBrowserProps {
   onImport: (data: { content: string; media: UploadedImage[]; importedListing: ImportedListing }) => void;
@@ -45,6 +45,13 @@ function buildNaddr(listing: ExistingListing): string {
   } catch {
     return '';
   }
+}
+
+/** Build the Plebeian Market web URL for a listing */
+function buildMarketplaceUrl(listing: ExistingListing): string {
+  const naddr = buildNaddr(listing);
+  if (!naddr) return '';
+  return `${PLEBEIAN_MARKET_URL}/p/${naddr}`;
 }
 
 /** Build a promo note content string from listing data */
@@ -80,10 +87,10 @@ function buildPromoContent(listing: ExistingListing): string {
     parts.push(`📍 ${listing.location}`);
   }
 
-  // Link to the original listing via nostr: URI
-  const naddr = buildNaddr(listing);
-  if (naddr) {
-    parts.push(`\nnostr:${naddr}`);
+  // Direct buy link to Plebeian Market
+  const marketplaceUrl = buildMarketplaceUrl(listing);
+  if (marketplaceUrl) {
+    parts.push(`🛒 Buy here: ${marketplaceUrl}`);
   }
 
   return parts.join('\n\n');
@@ -228,8 +235,10 @@ export function ListingBrowser({ onImport }: ListingBrowserProps) {
     }));
 
     // Store the imported listing metadata for AI context / reference
+    const naddr = buildNaddr(listing);
     const importedListing: ImportedListing = {
-      naddr: buildNaddr(listing),
+      naddr,
+      marketplaceUrl: naddr ? `${PLEBEIAN_MARKET_URL}/p/${naddr}` : undefined,
       title: listing.title,
       summary: listing.summary,
       price: listing.price,

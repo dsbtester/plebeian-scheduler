@@ -15,6 +15,7 @@ import {
   Sparkles,
   ShoppingBag,
   Info,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -260,7 +261,7 @@ export default function Compose() {
           {/* Imported listing reference */}
           {post.importedListing && (
             <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-3">
+              <CardContent className="p-3 space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
                     <ShoppingBag className="w-4 h-4 text-primary" />
@@ -286,6 +287,17 @@ export default function Compose() {
                     <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+                {post.importedListing.marketplaceUrl && (
+                  <a
+                    href={post.importedListing.marketplaceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline ml-11"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View on Plebeian Market
+                  </a>
+                )}
               </CardContent>
             </Card>
           )}

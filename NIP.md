@@ -27,11 +27,7 @@ Events are signed via NIP-07 compatible browser extensions. The scheduler never 
 
 ### NIP-19 — Bech32 Identifiers
 
-When importing a listing, an `naddr1` identifier is generated for the original NIP-99 listing. This is embedded in the promo note content as `nostr:naddr1...` so clients can render a link/preview of the original listing.
-
-### NIP-21 — `nostr:` URI Scheme
-
-The promo note content includes `nostr:naddr1...` URIs pointing back to the original listing. Compatible Nostr clients render these as clickable links or embedded previews.
+When importing a listing, an `naddr1` identifier is generated for the original NIP-99 listing. This identifier is used to construct a direct buy link to Plebeian Market (`https://plebeian.market/p/naddr1...`) which is included in the promo note content.
 
 ### NIP-40 — Event Expiration
 
@@ -131,7 +127,7 @@ A merchant imports their "Christmas Cakes" listing (NIP-99, kind 30402) and the 
 ```json
 {
   "kind": 1,
-  "content": "Christmas Cakes & Cookies\n\nFreshly baked holiday treats, made with love!\n\nPrice: 50000 sats\n📍 Austin, TX\n\nnostr:naddr1qqxnzd3e...\nhttps://blossom.example.com/cakes.jpg",
+  "content": "Christmas Cakes & Cookies\n\nFreshly baked holiday treats, made with love!\n\nPrice: 50000 sats\n📍 Austin, TX\n\n🛒 Buy here: https://plebeian.market/p/naddr1qqxnzd3e...\nhttps://blossom.example.com/cakes.jpg",
   "tags": [
     ["imeta", "url https://blossom.example.com/cakes.jpg", "m image/jpeg", "dim 1200x800"]
   ],
