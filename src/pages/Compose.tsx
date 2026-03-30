@@ -13,14 +13,12 @@ import {
   Trash2,
   ImageIcon,
   Clock,
-  Zap,
   Tag,
   MapPin,
   DollarSign,
   X,
   Plus,
   ChevronDown,
-  Server,
   Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +27,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -53,7 +50,7 @@ import { useScheduler } from '@/contexts/SchedulerContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
-import { buildEvent, buildDvmPublishRequest } from '@/lib/eventBuilder';
+import { buildEvent } from '@/lib/eventBuilder';
 import {
   CURRENCIES, PRICE_FREQUENCIES,
   createNewPost,
@@ -63,9 +60,9 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
 const KIND_OPTIONS = [
-  { value: 'listing' as PostKind, label: 'Marketplace Listing', icon: ShoppingBag, desc: 'NIP-99 (kind 30402)', color: 'text-primary' },
-  { value: 'note' as PostKind, label: 'Short Note', icon: MessageSquare, desc: 'Kind 1', color: 'text-blue-500' },
-  { value: 'article' as PostKind, label: 'Long-form Article', icon: BookOpen, desc: 'NIP-23 (kind 30023)', color: 'text-emerald-500' },
+  { value: 'listing' as PostKind, label: 'Marketplace Listing', icon: ShoppingBag, desc: 'Product or service for sale', color: 'text-primary' },
+  { value: 'note' as PostKind, label: 'Short Note', icon: MessageSquare, desc: 'Quick announcement or update', color: 'text-blue-500' },
+  { value: 'article' as PostKind, label: 'Long-form Article', icon: BookOpen, desc: 'Blog post or guide', color: 'text-emerald-500' },
 ];
 
 export default function Compose() {
@@ -84,36 +81,29 @@ export default function Compose() {
   const editId = searchParams.get('edit');
   const initialKind = (searchParams.get('kind') as PostKind) || 'listing';
 
-  // Find existing post from the store if editing — no useEffect needed
   const existingPost = useMemo(() => {
-    if (editId) {
-      return posts.find(p => p.id === editId);
-    }
+    if (editId) return posts.find(p => p.id === editId);
     return undefined;
   }, [editId, posts]);
 
-  // Local post state — initialized synchronously, no side effects
   const [post, setPost] = useState<SchedulerPost>(() => {
     if (existingPost) return existingPost;
-    return createNewPost(initialKind, user?.pubkey ?? '');
+    // DVM on by default for scheduled posts
+    const p = createNewPost(initialKind, user?.pubkey ?? '');
+    p.useDvm = true;
+    return p;
   });
 
-  // Track whether we've persisted this new post to the store yet
   const [persisted, setPersisted] = useState(!!editId);
-
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(() => {
-    if (existingPost?.scheduledAt) {
-      return new Date(existingPost.scheduledAt * 1000);
-    }
+    if (existingPost?.scheduledAt) return new Date(existingPost.scheduledAt * 1000);
     return undefined;
   });
   const [scheduleTime, setScheduleTime] = useState(() => {
-    if (existingPost?.scheduledAt) {
-      return format(new Date(existingPost.scheduledAt * 1000), 'HH:mm');
-    }
+    if (existingPost?.scheduledAt) return format(new Date(existingPost.scheduledAt * 1000), 'HH:mm');
     return '12:00';
   });
-  const [showScheduler, setShowScheduler] = useState(!!existingPost?.scheduledAt);
+  const [showScheduler, setShowScheduler] = useState(false);
   const [newCategory, setNewCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -142,11 +132,8 @@ export default function Compose() {
       : post.articleFields?.categories ?? [];
     if (!cats.includes(newCategory.trim().toLowerCase())) {
       const updated = [...cats, newCategory.trim().toLowerCase()];
-      if (post.kind === 'listing') {
-        updateListingField('categories', updated);
-      } else {
-        updateArticleField('categories', updated);
-      }
+      if (post.kind === 'listing') updateListingField('categories', updated);
+      else updateArticleField('categories', updated);
     }
     setNewCategory('');
   }, [newCategory, post, updateListingField, updateArticleField]);
@@ -159,7 +146,7 @@ export default function Compose() {
     }
   }, [post, updateListingField, updateArticleField]);
 
-  // Persist to global store and save as draft
+  // Save as draft
   const handleSaveDraft = useCallback(() => {
     setIsSaving(true);
     const updated = { ...post, status: 'draft' as const, authorPubkey: user?.pubkey ?? post.authorPubkey };
@@ -170,7 +157,7 @@ export default function Compose() {
     setIsSaving(false);
   }, [post, user, updatePost, toast]);
 
-  // Schedule for later
+  // Schedule for a specific date & time
   const handleSchedule = useCallback(() => {
     if (!scheduleDate) return;
 
@@ -188,16 +175,16 @@ export default function Compose() {
       ...post,
       status: 'scheduled',
       scheduledAt,
+      useDvm: true, // always use DVM for scheduled posts
       authorPubkey: user?.pubkey ?? post.authorPubkey,
     };
     updatePost(updated);
     setPost(updated);
     setPersisted(true);
+    setShowScheduler(false);
     toast({
-      title: 'Post scheduled',
-      description: post.useDvm
-        ? `DVM job will be submitted. Publishes ${format(scheduledDate, 'MMM d, yyyy h:mm a')}.`
-        : `Scheduled for ${format(scheduledDate, 'MMM d, yyyy h:mm a')}. Keep this tab open!`,
+      title: 'Post scheduled!',
+      description: `Your post will be published on ${format(scheduledDate, 'MMM d, yyyy')} at ${format(scheduledDate, 'h:mm a')}.`,
     });
     navigate('/');
   }, [post, scheduleDate, scheduleTime, user, updatePost, toast, navigate]);
@@ -209,21 +196,21 @@ export default function Compose() {
       ...post,
       status: 'scheduled',
       scheduledAt,
+      useDvm: true, // always use DVM for scheduled posts
       authorPubkey: user?.pubkey ?? post.authorPubkey,
     };
     updatePost(updated);
     setPost(updated);
     setPersisted(true);
+    setShowScheduler(false);
     toast({
       title: `Scheduled in ${label}`,
-      description: post.useDvm
-        ? `DVM job will be submitted. Post publishes at ${format(new Date(scheduledAt * 1000), 'MMM d, h:mm a')}.`
-        : `Will publish at ${format(new Date(scheduledAt * 1000), 'MMM d, h:mm a')}. Keep this tab open!`,
+      description: `Your post will be published at ${format(new Date(scheduledAt * 1000), 'h:mm a')}.`,
     });
     navigate('/');
   }, [post, user, updatePost, toast, navigate]);
 
-  // Publish now
+  // Publish now — direct publish to relays (no DVM)
   const handlePublishNow = useCallback(async () => {
     if (!user) return;
 
@@ -231,40 +218,22 @@ export default function Compose() {
       const postToPublish = { ...post, authorPubkey: user.pubkey };
       const event = buildEvent(postToPublish, false);
 
-      if (post.useDvm) {
-        const dvmRequest = buildDvmPublishRequest(postToPublish, JSON.stringify(event));
-        const published = await publishEvent({
-          kind: dvmRequest.kind,
-          content: dvmRequest.content,
-          tags: dvmRequest.tags,
-          created_at: dvmRequest.created_at,
-        });
-        const updated: SchedulerPost = {
-          ...postToPublish,
-          status: 'published',
-          publishedAt: Math.floor(Date.now() / 1000),
-          publishedEventId: published.id,
-        };
-        updatePost(updated);
-        setPersisted(true);
-        toast({ title: 'DVM job submitted', description: 'Your publish job has been submitted to the DVM network.' });
-      } else {
-        const published = await publishEvent({
-          kind: event.kind,
-          content: event.content,
-          tags: event.tags,
-          created_at: event.created_at,
-        });
-        const updated: SchedulerPost = {
-          ...postToPublish,
-          status: 'published',
-          publishedAt: Math.floor(Date.now() / 1000),
-          publishedEventId: published.id,
-        };
-        updatePost(updated);
-        setPersisted(true);
-        toast({ title: 'Published!', description: 'Your event has been published to Nostr relays.' });
-      }
+      const published = await publishEvent({
+        kind: event.kind,
+        content: event.content,
+        tags: event.tags,
+        created_at: event.created_at,
+      });
+
+      const updated: SchedulerPost = {
+        ...postToPublish,
+        status: 'published',
+        publishedAt: Math.floor(Date.now() / 1000),
+        publishedEventId: published.id,
+      };
+      updatePost(updated);
+      setPersisted(true);
+      toast({ title: 'Published!', description: 'Your post is now live on Nostr.' });
       navigate('/');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -276,23 +245,21 @@ export default function Compose() {
   }, [post, user, publishEvent, updatePost, toast, navigate]);
 
   const handleDelete = useCallback(() => {
-    if (persisted) {
-      removePost(post.id);
-    }
+    if (persisted) removePost(post.id);
     toast({ title: 'Post deleted' });
     navigate('/');
   }, [post, persisted, removePost, toast, navigate]);
 
-  // Switch kind — create a fresh local post, no global state mutation
   const handleSwitchKind = useCallback((newKind: PostKind) => {
     if (post.kind === newKind) return;
     const freshPost = createNewPost(newKind, user?.pubkey ?? '');
-    freshPost.content = post.content; // preserve content across kind switches
+    freshPost.content = post.content;
+    freshPost.useDvm = true;
     setPost(freshPost);
     setPersisted(false);
   }, [post, user]);
 
-  // Import data from an existing Nostr event (NIP-99 listing or NIP-23 article)
+  // Import from existing Nostr event
   const handleImport = useCallback((data: Partial<SchedulerPost>) => {
     setPost(prev => {
       const updated = { ...prev };
@@ -306,10 +273,10 @@ export default function Compose() {
       }
       return updated;
     });
-    toast({ title: 'Imported!', description: 'All fields have been auto-filled from your existing event.' });
+    toast({ title: 'Imported!', description: 'All fields have been auto-filled from your listing.' });
   }, [toast]);
 
-  // Insert AI-generated content into the content field
+  // Insert AI-generated content
   const handleAiInsert = useCallback((text: string) => {
     setPost(prev => ({
       ...prev,
@@ -344,9 +311,9 @@ export default function Compose() {
             {editId ? 'Edit Post' : 'Compose'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {post.kind === 'listing' && 'NIP-99 Classified Listing (kind 30402)'}
-            {post.kind === 'note' && 'Short text note (kind 1)'}
-            {post.kind === 'article' && 'Long-form article (NIP-23, kind 30023)'}
+            {post.kind === 'listing' && 'Marketplace listing'}
+            {post.kind === 'note' && 'Short note'}
+            {post.kind === 'article' && 'Long-form article'}
           </p>
         </div>
         {post.status !== 'draft' && (
@@ -384,13 +351,10 @@ export default function Compose() {
       )}
 
       <Tabs defaultValue="content" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="media">
             <ImageIcon className="w-3.5 h-3.5 mr-1.5" /> Media
-          </TabsTrigger>
-          <TabsTrigger value="options">
-            <Zap className="w-3.5 h-3.5 mr-1.5" /> Options
           </TabsTrigger>
         </TabsList>
 
@@ -447,14 +411,10 @@ export default function Compose() {
                       value={post.listingFields?.currency ?? 'SAT'}
                       onValueChange={v => updateListingField('currency', v as Currency)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {CURRENCIES.map(c => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.symbol} {c.label}
-                          </SelectItem>
+                          <SelectItem key={c.value} value={c.value}>{c.symbol} {c.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -465,14 +425,10 @@ export default function Compose() {
                       value={post.listingFields?.priceFrequency || 'one-time'}
                       onValueChange={v => updateListingField('priceFrequency', (v === 'one-time' ? '' : v) as PriceFrequency)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {PRICE_FREQUENCIES.map(f => (
-                          <SelectItem key={f.value || 'one-time'} value={f.value || 'one-time'}>
-                            {f.label}
-                          </SelectItem>
+                          <SelectItem key={f.value || 'one-time'} value={f.value || 'one-time'}>{f.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -496,9 +452,7 @@ export default function Compose() {
                       value={post.listingFields?.status ?? 'active'}
                       onValueChange={v => updateListingField('status', v as ListingStatus)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="sold">Sold</SelectItem>
@@ -553,7 +507,7 @@ export default function Compose() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
-                  {post.kind === 'note' ? 'Note Content' : 'Description (Markdown)'}
+                  {post.kind === 'note' ? 'Your Note' : 'Description'}
                 </CardTitle>
                 <AiGenerateDialog
                   postKind={post.kind}
@@ -582,9 +536,9 @@ export default function Compose() {
               <Textarea
                 placeholder={
                   post.kind === 'listing'
-                    ? 'Describe your product or service in detail. Markdown supported...'
+                    ? 'Describe your product or service in detail...'
                     : post.kind === 'article'
-                      ? 'Write your article in Markdown...'
+                      ? 'Write your article...'
                       : "What's on your mind?"
                 }
                 value={post.content}
@@ -594,7 +548,6 @@ export default function Compose() {
               />
               <p className="text-xs text-muted-foreground mt-2">
                 {post.content.length} characters
-                {post.kind !== 'note' && ' \u00B7 Markdown supported'}
               </p>
             </CardContent>
           </Card>
@@ -661,135 +614,14 @@ export default function Compose() {
                   }
                 }}
               />
-              <p className="text-xs text-muted-foreground mt-3">
-                Images are uploaded to Blossom servers with NIP-92 imeta tags for interoperability.
-              </p>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Options Tab */}
-        <TabsContent value="options" className="space-y-4">
-          {/* DVM Publishing */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Server className="w-4 h-4" />
-                Offline Scheduling (NIP-90 DVM)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 mr-3">
-                  <p className="text-sm font-medium">Publish via DVM</p>
-                  <p className="text-xs text-muted-foreground">
-                    Delegates publishing to a Data Vending Machine service provider (like Shipyard).
-                    Your post will be published at the scheduled time <strong>even if you close the browser</strong>.
-                  </p>
-                </div>
-                <Switch
-                  checked={post.useDvm}
-                  onCheckedChange={v => updateField('useDvm', v)}
-                />
-              </div>
-
-              {!post.useDvm && (
-                <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    <strong>Browser mode:</strong> The app will publish your post when the time comes, but you must keep this tab open. If you close the browser, the post won't publish until you reopen it.
-                  </p>
-                </div>
-              )}
-
-              {post.useDvm && (
-                <div className="space-y-3">
-                  <div className="p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                      <strong>DVM mode:</strong> Your publish job will be submitted to the DVM network immediately. A service provider will publish the event at the scheduled time — you can close the browser.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">DVM Relay URLs (optional, one per line)</Label>
-                    <Textarea
-                      placeholder="wss://relay.example.com"
-                      value={post.dvmRelays.join('\n')}
-                      onChange={e => updateField('dvmRelays', e.target.value.split('\n').filter(Boolean))}
-                      rows={3}
-                      className="text-xs font-mono"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Target relays where the DVM should publish. Leave empty to use your default relays.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* NIP-40 Expiration */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Event Expiration (NIP-40)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Set expiration</p>
-                  <p className="text-xs text-muted-foreground">
-                    Relays should delete the event after this time
-                  </p>
-                </div>
-                <Switch
-                  checked={post.expiresAt !== null}
-                  onCheckedChange={v => updateField('expiresAt', v ? Math.floor(Date.now() / 1000) + 86400 * 7 : null)}
-                />
-              </div>
-
-              {post.expiresAt !== null && (
-                <div className="space-y-2 pl-1">
-                  <Label className="text-xs">Expires at</Label>
-                  <Input
-                    type="datetime-local"
-                    value={post.expiresAt ? format(new Date(post.expiresAt * 1000), "yyyy-MM-dd'T'HH:mm") : ''}
-                    onChange={e => {
-                      const d = new Date(e.target.value);
-                      if (!isNaN(d.getTime())) {
-                        updateField('expiresAt', Math.floor(d.getTime() / 1000));
-                      }
-                    }}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* d-tag (for addressable events) */}
-          {post.kind !== 'note' && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Identifier (d-tag)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Input
-                  value={post.dTag}
-                  onChange={e => updateField('dTag', e.target.value)}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  Unique identifier for this addressable event. Auto-generated, but you can customize it.
-                </p>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
 
       <Separator />
 
-      {/* Action Bar */}
+      {/* Action Bar — Schedule is the hero, Publish Now is secondary */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pb-8">
         <div className="flex-1 flex flex-wrap gap-2">
           <Button
@@ -802,35 +634,70 @@ export default function Compose() {
             Save Draft
           </Button>
 
+          <Button
+            variant="ghost"
+            className="gap-2 text-muted-foreground"
+            onClick={handlePublishNow}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            Publish Now
+          </Button>
+        </div>
+
+        <div className="flex gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this post?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. The draft will be permanently removed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Schedule — the main action */}
           <Popover open={showScheduler} onOpenChange={setShowScheduler}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button className="gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30">
                 <CalendarClock className="w-4 h-4" />
-                Schedule
+                Schedule Post
                 <ChevronDown className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
+            <PopoverContent className="w-[320px] p-0" align="end">
               <div className="p-3 space-y-3">
-                {/* Quick schedule buttons */}
+                {/* Quick schedule */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">Quick schedule</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(300, '5 minutes')}>
-                      <Clock className="w-3 h-3" />
-                      5 minutes
+                      <Clock className="w-3 h-3" /> 5 minutes
                     </Button>
                     <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(3600, '1 hour')}>
-                      <Clock className="w-3 h-3" />
-                      1 hour
+                      <Clock className="w-3 h-3" /> 1 hour
                     </Button>
                     <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(86400, '24 hours')}>
-                      <Clock className="w-3 h-3" />
-                      24 hours
+                      <Clock className="w-3 h-3" /> 24 hours
                     </Button>
                     <Button size="sm" variant="secondary" className="text-xs h-9 gap-1.5" onClick={() => handleQuickSchedule(604800, '1 week')}>
-                      <Clock className="w-3 h-3" />
-                      1 week
+                      <Clock className="w-3 h-3" /> 1 week
                     </Button>
                   </div>
                 </div>
@@ -839,7 +706,7 @@ export default function Compose() {
 
                 {/* Custom date & time */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Custom date & time</p>
+                  <p className="text-xs font-medium text-muted-foreground">Pick a date & time</p>
                   <Calendar
                     mode="single"
                     selected={scheduleDate}
@@ -871,43 +738,6 @@ export default function Compose() {
               </div>
             </PopoverContent>
           </Popover>
-        </div>
-
-        <div className="flex gap-2">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this post?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. The draft will be permanently removed.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          <Button
-            className="gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/30"
-            onClick={handlePublishNow}
-            disabled={isPublishing}
-          >
-            {isPublishing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            Publish Now
-          </Button>
         </div>
       </div>
     </div>
