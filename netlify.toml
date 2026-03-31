@@ -1,0 +1,18 @@
+# Netlify configuration for Plebeian Scheduler
+
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+# Scheduled function — runs every minute to publish due events
+[functions]
+  directory = "netlify/functions"
+
+[functions."scheduler"]
+  schedule = "* * * * *"
+
+# SPA fallback — all non-file, non-function routes go to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

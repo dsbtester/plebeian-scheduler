@@ -41,7 +41,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { user } = useCurrentUser();
-  const { stats } = useScheduler();
+  const { stats, posts } = useScheduler();
 
   const isDark = theme === 'dark';
 
@@ -122,19 +122,37 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
 
         {/* Scheduled count indicator */}
-        {stats.scheduled > 0 && (
-          <div className="mx-3 mb-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse-dot" />
-              <span className="text-xs font-medium text-primary">
-                {stats.scheduled} scheduled
-              </span>
+        {stats.scheduled > 0 && (() => {
+          const scheduledPosts = posts.filter(p => p.status === 'scheduled');
+          const serverCount = scheduledPosts.filter(p => p.serverEventId).length;
+          const localCount = scheduledPosts.filter(p => !p.serverEventId).length;
+
+          return (
+            <div className="mx-3 mb-2 p-3 rounded-lg bg-primary/5 border border-primary/10 space-y-2">
+              {serverCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    {serverCount} on server
+                  </span>
+                </div>
+              )}
+              {localCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse-dot" />
+                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    {localCount} local
+                  </span>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                {localCount > 0
+                  ? 'Keep this tab open for local posts'
+                  : 'Server will publish — safe to close'}
+              </p>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">
-              Keep this tab open to publish on time
-            </p>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Bottom section */}
         <div className="p-3 border-t border-border space-y-3">

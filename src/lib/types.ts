@@ -77,6 +77,8 @@ export interface SchedulerPost {
   dvmRelays: string[];
   /** Error message if publishing failed */
   errorMessage: string | null;
+  /** Server-side event ID (when scheduled via the backend) */
+  serverEventId: string | null;
   /** Source listing data (if this promo note was crafted from a NIP-99 listing) */
   importedListing?: ImportedListing;
 }
@@ -108,5 +110,6 @@ export function createNewPost(authorPubkey: string): SchedulerPost {
     useDvm: false,
     dvmRelays: [],
     errorMessage: null,
+    serverEventId: null,
   };
 }

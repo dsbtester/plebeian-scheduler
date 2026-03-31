@@ -45,7 +45,10 @@ export function buildEvent(post: SchedulerPost): UnsignedEvent {
     kind: 1,
     content,
     tags,
-    // Always use current time — relays reject future created_at
+    // Always use current time — relays reject future created_at.
+    // For server-scheduled posts, this means created_at reflects when the event
+    // was signed, not when it was published. This is intentional: the signature
+    // covers created_at and cannot be changed after signing.
     created_at: Math.floor(Date.now() / 1000),
   };
 }

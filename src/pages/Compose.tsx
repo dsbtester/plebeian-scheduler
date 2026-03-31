@@ -45,6 +45,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
 import { buildEvent } from '@/lib/eventBuilder';
+import { scheduleEvent } from '@/lib/schedulerApi';
 import { createNewPost, type SchedulerPost, type ImportedListing, type UploadedImage } from '@/lib/types';
 import { format } from 'date-fns';
 
@@ -100,9 +101,58 @@ export default function Compose() {
     setIsSaving(false);
   }, [post, user, updatePost, toast]);
 
+  // Core scheduling logic — signs the event now and sends to the server
+  const submitSchedule = useCallback(async (scheduledAt: number) => {
+    if (!user) return;
+
+    const postToSchedule = { ...post, authorPubkey: user.pubkey };
+    const eventData = buildEvent(postToSchedule);
+
+    // Sign the event NOW so the server never needs our private key
+    const signedEvent = await user.signer.signEvent({
+      kind: eventData.kind,
+      content: eventData.content,
+      tags: eventData.tags,
+      created_at: eventData.created_at,
+    });
+
+    // Send the pre-signed event to the server for future publishing
+    try {
+      const result = await scheduleEvent({
+        signedEvent,
+        publishAt: scheduledAt,
+      });
+
+      const updated: SchedulerPost = {
+        ...postToSchedule,
+        status: 'scheduled',
+        scheduledAt,
+        serverEventId: result.id,
+        publishedEventId: signedEvent.id,
+      };
+      updatePost(updated);
+      setPost(updated);
+      setPersisted(true);
+      return { ok: true, eventId: signedEvent.id };
+    } catch (error) {
+      // Server unavailable — fall back to local scheduling
+      console.warn('[Scheduler] Server unavailable, falling back to local scheduling:', error);
+      const updated: SchedulerPost = {
+        ...postToSchedule,
+        status: 'scheduled',
+        scheduledAt,
+        serverEventId: null,
+      };
+      updatePost(updated);
+      setPost(updated);
+      setPersisted(true);
+      return { ok: false, local: true };
+    }
+  }, [post, user, updatePost]);
+
   // Schedule for a specific date & time
-  const handleSchedule = useCallback(() => {
-    if (!scheduleDate) return;
+  const handleSchedule = useCallback(async () => {
+    if (!scheduleDate || !user) return;
 
     const [hours, minutes] = scheduleTime.split(':').map(Number);
     const scheduledDate = new Date(scheduleDate);
@@ -114,44 +164,46 @@ export default function Compose() {
       return;
     }
 
-    const updated: SchedulerPost = {
-      ...post,
-      status: 'scheduled',
-      scheduledAt,
-      useDvm: false,
-      authorPubkey: user?.pubkey ?? post.authorPubkey,
-    };
-    updatePost(updated);
-    setPost(updated);
-    setPersisted(true);
     setShowScheduler(false);
-    toast({
-      title: 'Post scheduled!',
-      description: `Your promo note will be published on ${format(scheduledDate, 'MMM d, yyyy')} at ${format(scheduledDate, 'h:mm a')}. Keep this tab open.`,
-    });
+    const result = await submitSchedule(scheduledAt);
+
+    if (result?.ok) {
+      toast({
+        title: 'Post scheduled!',
+        description: `Your note will publish on ${format(scheduledDate, 'MMM d, yyyy')} at ${format(scheduledDate, 'h:mm a')}. You can close this tab.`,
+      });
+    } else {
+      toast({
+        title: 'Scheduled locally',
+        description: `Server unavailable — keep this tab open for it to publish at ${format(scheduledDate, 'h:mm a')}.`,
+        variant: 'destructive',
+      });
+    }
     navigate('/');
-  }, [post, scheduleDate, scheduleTime, user, updatePost, toast, navigate]);
+  }, [post, scheduleDate, scheduleTime, user, submitSchedule, toast, navigate]);
 
   // Quick schedule — offset in seconds from now
-  const handleQuickSchedule = useCallback((offsetSeconds: number, label: string) => {
+  const handleQuickSchedule = useCallback(async (offsetSeconds: number, label: string) => {
+    if (!user) return;
     const scheduledAt = Math.floor(Date.now() / 1000) + offsetSeconds;
-    const updated: SchedulerPost = {
-      ...post,
-      status: 'scheduled',
-      scheduledAt,
-      useDvm: false,
-      authorPubkey: user?.pubkey ?? post.authorPubkey,
-    };
-    updatePost(updated);
-    setPost(updated);
-    setPersisted(true);
+
     setShowScheduler(false);
-    toast({
-      title: `Scheduled in ${label}`,
-      description: `Your promo note will be published at ${format(new Date(scheduledAt * 1000), 'h:mm a')}. Keep this tab open.`,
-    });
+    const result = await submitSchedule(scheduledAt);
+
+    if (result?.ok) {
+      toast({
+        title: `Scheduled in ${label}`,
+        description: `Your note will publish at ${format(new Date(scheduledAt * 1000), 'h:mm a')}. You can close this tab.`,
+      });
+    } else {
+      toast({
+        title: `Scheduled locally in ${label}`,
+        description: `Server unavailable — keep this tab open for it to publish at ${format(new Date(scheduledAt * 1000), 'h:mm a')}.`,
+        variant: 'destructive',
+      });
+    }
     navigate('/');
-  }, [post, user, updatePost, toast, navigate]);
+  }, [user, submitSchedule, toast, navigate]);
 
   // Publish now — direct publish to relays (no DVM)
   const handlePublishNow = useCallback(async () => {

@@ -12,6 +12,8 @@ import {
   TrendingUp,
   MessageSquare,
   ShoppingBag,
+  Server,
+  Monitor,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -128,6 +130,7 @@ export default function Dashboard() {
             ) : (
               upcoming.map(post => {
                 const hasListing = !!post.importedListing;
+                const isServer = !!post.serverEventId;
                 return (
                   <Link
                     key={post.id}
@@ -149,9 +152,15 @@ export default function Dashboard() {
                         {post.scheduledAt && format(new Date(post.scheduledAt * 1000), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {post.scheduledAt && formatDistanceToNow(new Date(post.scheduledAt * 1000), { addSuffix: true })}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <Badge variant="outline" className="text-xs">
+                        {post.scheduledAt && formatDistanceToNow(new Date(post.scheduledAt * 1000), { addSuffix: true })}
+                      </Badge>
+                      <span className={`flex items-center gap-1 text-[10px] ${isServer ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                        {isServer ? <Server className="w-2.5 h-2.5" /> : <Monitor className="w-2.5 h-2.5" />}
+                        {isServer ? 'server' : 'local'}
+                      </span>
+                    </div>
                   </Link>
                 );
               })
