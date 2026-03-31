@@ -222,7 +222,7 @@ function jsonResponse(body, status = 200) {
 
 // ─── Main Handler ─────────────────────────────────────────────────
 
-export default async function handler(request) {
+export async function handler(request) {
   // CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders() });
