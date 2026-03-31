@@ -218,7 +218,7 @@ function ListingSkeletons() {
 }
 
 export function ListingBrowser({ onImport, onCampaign }: ListingBrowserProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [mode, setMode] = useState<BrowseMode>('mine');
   const [searchTerm, setSearchTerm] = useState('');
   const [allSearchInput, setAllSearchInput] = useState('');
@@ -393,20 +393,28 @@ export function ListingBrowser({ onImport, onCampaign }: ListingBrowserProps) {
 
           {/* Campaign mode toggle */}
           {onCampaign && mode === 'mine' && (myListings?.length ?? 0) > 1 && (
-            <div className="flex items-center justify-between">
+            <div className={cn(
+              'flex items-center justify-between p-2.5 rounded-lg border transition-all',
+              campaignMode ? 'bg-primary/5 border-primary/20' : 'bg-muted/50 border-border hover:border-primary/20'
+            )}>
               <button
                 type="button"
                 onClick={() => { setCampaignMode(!campaignMode); setSelectedIds(new Set()); }}
-                className={cn(
-                  'text-xs font-medium transition-colors',
-                  campaignMode ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                )}
+                className="flex items-center gap-2 text-xs font-medium transition-colors"
               >
-                {campaignMode ? '✓ Campaign mode' : '📢 Select multiple for campaign'}
+                <span className={cn(
+                  'w-5 h-5 rounded flex items-center justify-center text-[10px] transition-colors',
+                  campaignMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                )}>
+                  {campaignMode ? '✓' : '📢'}
+                </span>
+                <span className={campaignMode ? 'text-primary' : 'text-foreground'}>
+                  {campaignMode ? 'Campaign mode — select listings below' : 'Multi-listing campaign'}
+                </span>
               </button>
               {campaignMode && selectedIds.size > 0 && (
-                <Button size="sm" className="text-xs h-7 gap-1.5" onClick={handleCreateCampaign}>
-                  Create campaign ({selectedIds.size})
+                <Button size="sm" className="text-xs h-7 gap-1.5 shadow-sm" onClick={handleCreateCampaign}>
+                  Schedule {selectedIds.size} posts
                 </Button>
               )}
             </div>
