@@ -21,7 +21,6 @@ import {
   Upload,
   Hash,
   Eye,
-  EyeOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,7 @@ import {
 import { ImageUploader } from '@/components/ImageUploader';
 import { ListingBrowser } from '@/components/ListingBrowser';
 import { AiGenerateDialog } from '@/components/AiGenerateDialog';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { useScheduler } from '@/contexts/SchedulerContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
@@ -101,7 +101,6 @@ export default function Compose() {
   });
   const [showScheduler, setShowScheduler] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [hashtagInput, setHashtagInput] = useState('');
 
   const updateField = useCallback(<K extends keyof SchedulerPost>(field: K, value: SchedulerPost[K]) => {
@@ -542,27 +541,38 @@ export default function Compose() {
       )}
 
       {/* ===== CONTENT EDITOR (all post types) ===== */}
-      <Card>
-        <CardHeader className="pb-3">
+      {post.postType === 'long' ? (
+        /* Long-form: rich Markdown editor with toolbar */
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
-              {post.postType === 'long' ? 'Article Content' : 'Your Note'}
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              {post.postType === 'long' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => setShowPreview(!showPreview)}
-                >
-                  {showPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  {showPreview ? 'Edit' : 'Preview'}
-                </Button>
-              )}
+            <p className="text-sm font-medium">Article Content</p>
+            <AiGenerateDialog
+              currentContent={post.content}
+              listingTitle={post.title || undefined}
+              listingContext={undefined}
+              onInsert={handleAiInsert}
+            >
+              <Button variant="outline" size="sm" className="gap-2 text-xs">
+                <Sparkles className="w-3.5 h-3.5" />
+                AI Generate
+              </Button>
+            </AiGenerateDialog>
+          </div>
+          <MarkdownEditor
+            value={post.content}
+            onChange={val => updateField('content', val)}
+            placeholder="Start writing your article...\n\nUse the toolbar above for formatting, or write Markdown directly. Keyboard shortcuts: Ctrl+B for bold, Ctrl+I for italic, Ctrl+K for links."
+          />
+        </div>
+      ) : (
+        /* Short / Promo: simple card editor */
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Your Note</CardTitle>
               <AiGenerateDialog
                 currentContent={post.content}
-                listingTitle={post.importedListing?.title || (post.postType === 'long' ? post.title : undefined)}
+                listingTitle={post.importedListing?.title}
                 listingContext={
                   post.importedListing
                     ? [
@@ -581,48 +591,31 @@ export default function Compose() {
                 </Button>
               </AiGenerateDialog>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {showPreview && post.postType === 'long' ? (
-            /* Markdown preview for articles */
-            <div className="prose prose-sm dark:prose-invert max-w-none min-h-[200px] p-4 rounded-lg border bg-secondary/30">
-              {post.content ? (
-                <div className="whitespace-pre-wrap">{post.content}</div>
-              ) : (
-                <p className="text-muted-foreground italic">Nothing to preview yet...</p>
-              )}
-            </div>
-          ) : (
+          </CardHeader>
+          <CardContent className="space-y-3">
             <Textarea
               placeholder={
-                post.postType === 'long'
-                  ? 'Write your article in Markdown...\n\n## Section Heading\n\nYour content here. Use **bold**, *italic*, [links](url), and more.'
-                  : post.postType === 'promo'
-                    ? "Write your promotional note... e.g. 'Check out my fresh Christmas Cakes! 50,000 sats 🎄'"
-                    : "What's on your mind? Share an update, announcement, or thought..."
+                post.postType === 'promo'
+                  ? "Write your promotional note... e.g. 'Check out my fresh Christmas Cakes! 50,000 sats 🎄'"
+                  : "What's on your mind? Share an update, announcement, or thought..."
               }
               value={post.content}
               onChange={e => updateField('content', e.target.value)}
-              className={cn(
-                'text-sm font-mono',
-                post.postType === 'long' ? 'min-h-[400px]' : 'min-h-[160px]',
-              )}
-              rows={post.postType === 'long' ? 20 : 8}
+              className="min-h-[160px] text-sm"
+              rows={8}
             />
-          )}
-
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {post.content.length} characters
-            </p>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Info className="w-3 h-3" />
-              {post.postType === 'long' ? 'Publishes as kind 30023 (NIP-23 article)' : 'Publishes as kind 1 note'}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {post.content.length} characters
+              </p>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Info className="w-3 h-3" />
+                Publishes as kind 1 note
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ===== MEDIA / IMAGE ATTACHMENTS ===== */}
       <Card>
