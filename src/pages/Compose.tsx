@@ -186,8 +186,9 @@ export default function Compose() {
   }, [post, user, updatePost]);
 
   // Schedule for a specific date & time
+  const [isScheduling, setIsScheduling] = useState(false);
   const handleSchedule = useCallback(async () => {
-    if (!scheduleDate || !user) return;
+    if (!scheduleDate || !user || isScheduling) return;
 
     const [hours, minutes] = scheduleTime.split(':').map(Number);
     const scheduledDate = new Date(scheduleDate);
@@ -195,27 +196,37 @@ export default function Compose() {
     const scheduledAt = Math.floor(scheduledDate.getTime() / 1000);
 
     if (scheduledAt <= Math.floor(Date.now() / 1000)) {
-      toast({ title: 'Invalid time', description: 'Schedule time must be in the future.', variant: 'destructive' });
+      toast({ title: 'Invalid time', description: 'The selected date and time is in the past. Pick a future time.', variant: 'destructive' });
+      // Don't close the popover — let user fix the time
       return;
     }
 
+    setIsScheduling(true);
     setShowScheduler(false);
-    const result = await submitSchedule(scheduledAt);
 
-    if (result?.ok) {
-      toast({
-        title: 'Post scheduled!',
-        description: `Will publish on ${format(scheduledDate, 'MMM d, yyyy')} at ${format(scheduledDate, 'h:mm a')}. You can close this tab.`,
-      });
-    } else {
-      toast({
-        title: 'Scheduled locally',
-        description: `Server unavailable — keep this tab open for it to publish at ${format(scheduledDate, 'h:mm a')}.`,
-        variant: 'destructive',
-      });
+    try {
+      const result = await submitSchedule(scheduledAt);
+
+      if (result?.ok) {
+        toast({
+          title: 'Post scheduled!',
+          description: `Will publish on ${format(scheduledDate, 'MMM d, yyyy')} at ${format(scheduledDate, 'h:mm a')}. You can close this tab.`,
+        });
+      } else {
+        toast({
+          title: 'Scheduled locally',
+          description: `Server unavailable — keep this tab open for it to publish at ${format(scheduledDate, 'h:mm a')}.`,
+          variant: 'destructive',
+        });
+      }
+      navigate('/');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast({ title: 'Scheduling failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsScheduling(false);
     }
-    navigate('/');
-  }, [post, scheduleDate, scheduleTime, user, submitSchedule, toast, navigate]);
+  }, [post, scheduleDate, scheduleTime, user, isScheduling, submitSchedule, toast, navigate]);
 
   // Quick schedule — offset in seconds from now
   const handleQuickSchedule = useCallback(async (offsetSeconds: number, label: string) => {
@@ -948,17 +959,19 @@ export default function Compose() {
                 <Button
                   className="w-full gap-2"
                   onClick={handleSchedule}
-                  disabled={!scheduleDate}
+                  disabled={!scheduleDate || isScheduling}
                 >
-                  <CalendarClock className="w-4 h-4" />
-                  {scheduleDate
-                    ? (() => {
-                        const [h, m] = scheduleTime.split(':').map(Number);
-                        const d = new Date(scheduleDate);
-                        d.setHours(h, m);
-                        return `Schedule for ${format(d, 'MMM d')} at ${format(d, 'h:mm a')}`;
-                      })()
-                    : 'Pick a date & time'}
+                  {isScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarClock className="w-4 h-4" />}
+                  {isScheduling
+                    ? 'Scheduling...'
+                    : scheduleDate
+                      ? (() => {
+                          const [h, m] = scheduleTime.split(':').map(Number);
+                          const d = new Date(scheduleDate);
+                          d.setHours(h, m);
+                          return `Schedule for ${format(d, 'MMM d')} at ${format(d, 'h:mm a')}`;
+                        })()
+                      : 'Pick a date & time'}
                 </Button>
               </div>
             </PopoverContent>
