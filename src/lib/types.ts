@@ -94,6 +94,12 @@ export interface SchedulerPost {
   errorMessage: string | null;
   /** Server-side event ID (when scheduled via the backend) */
   serverEventId: string | null;
+  /** Recurring schedule interval in seconds (0 = not recurring) */
+  recurringInterval: number;
+  /** How many times this recurring post has been published */
+  recurringCount: number;
+  /** Maximum recurrences (0 = infinite) */
+  recurringLimit: number;
   /** Source listing data (if this promo note was crafted from a NIP-99 listing) */
   importedListing?: ImportedListing;
 }
@@ -102,6 +108,15 @@ export interface SchedulerPost {
 export interface Queue {
   name: string;
   description: string;
+  createdAt: number;
+}
+
+/** Reusable content template */
+export interface PostTemplate {
+  id: string;
+  name: string;
+  content: string;
+  postType: PostType;
   createdAt: number;
 }
 
@@ -132,5 +147,8 @@ export function createNewPost(authorPubkey: string, postType: PostType = 'short'
     dvmRelays: [],
     errorMessage: null,
     serverEventId: null,
+    recurringInterval: 0,
+    recurringCount: 0,
+    recurringLimit: 0,
   };
 }

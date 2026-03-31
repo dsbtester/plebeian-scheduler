@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ShoppingBag,
   MessageSquare,
+  Newspaper,
   Clock,
   PenSquare,
 } from 'lucide-react';
@@ -41,8 +42,15 @@ const STATUS_COLORS: Record<string, string> = {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function getPostTitle(post: SchedulerPost): string {
+  if (post.postType === 'long' && post.title) return post.title;
   if (post.importedListing?.title) return post.importedListing.title;
   return post.content.slice(0, 40) || 'Empty note';
+}
+
+function getPostIcon(post: SchedulerPost) {
+  if (post.postType === 'long') return Newspaper;
+  if (post.postType === 'promo') return ShoppingBag;
+  return MessageSquare;
 }
 
 export default function CalendarView() {
@@ -140,15 +148,22 @@ export default function CalendarView() {
                 const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
                 const today = isToday(day);
 
-                return (
+                  // Heatmap intensity based on post count
+                  const intensity = dayPosts.length === 0 ? '' :
+                    dayPosts.length === 1 ? 'bg-primary/10' :
+                    dayPosts.length === 2 ? 'bg-primary/20' :
+                    dayPosts.length >= 3 ? 'bg-primary/30' : '';
+
+                  return (
                   <button
                     key={key}
                     onClick={() => setSelectedDate(day)}
                     className={cn(
                       'relative min-h-[72px] md:min-h-[88px] p-1.5 text-left bg-card transition-colors',
                       !isCurrentMonth && 'opacity-40',
-                      isSelected && 'bg-primary/5 ring-2 ring-primary ring-inset',
-                      !isSelected && 'hover:bg-secondary/50'
+                      isSelected && 'ring-2 ring-primary ring-inset bg-primary/5',
+                      !isSelected && intensity,
+                      !isSelected && !intensity && 'hover:bg-secondary/50'
                     )}
                   >
                     <span
@@ -222,19 +237,18 @@ export default function CalendarView() {
             </Card>
           ) : (
             selectedDayPosts.map(post => {
-              const hasListing = !!post.importedListing;
+              const PostIcon = getPostIcon(post);
               const ts = post.scheduledAt ?? post.createdAt;
 
               return (
                 <Card key={post.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-3">
                     <div className="flex items-start gap-3">
-                      <div className={cn('w-8 h-8 rounded-md flex items-center justify-center shrink-0', hasListing ? 'bg-primary/15' : 'bg-blue-500/15')}>
-                        {hasListing ? (
-                          <ShoppingBag className="w-4 h-4 text-primary" />
-                        ) : (
-                          <MessageSquare className="w-4 h-4 text-blue-500" />
-                        )}
+                      <div className={cn(
+                        'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
+                        STATUS_COLORS[post.status] ? 'bg-primary/15' : 'bg-blue-500/15'
+                      )}>
+                        <PostIcon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{getPostTitle(post)}</p>

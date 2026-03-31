@@ -24,7 +24,7 @@ const SERVER_CHECK_INTERVAL = 60_000; // Check server status every 60 seconds
 export function useSchedulerPublish() {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
-  const { posts, markPublished, markFailed } = useScheduler();
+  const { posts, markPublished, markFailed, updatePost } = useScheduler();
   const { toast } = useToast();
   const publishingRef = useRef(new Set<string>());
 
@@ -58,6 +58,33 @@ export function useSchedulerPublish() {
         title: `Published: ${label}`,
         description: `Event ${signedEvent.id.slice(0, 12)}... published to relays.`,
       });
+
+      // Handle recurring: auto-reschedule if the post has a recurring interval
+      if (post.recurringInterval > 0) {
+        const hitLimit = post.recurringLimit > 0 && (post.recurringCount + 1) >= post.recurringLimit;
+        if (!hitLimit) {
+          const nextAt = Math.floor(Date.now() / 1000) + post.recurringInterval;
+          const newPost = {
+            ...post,
+            id: crypto.randomUUID(),
+            status: 'scheduled' as const,
+            scheduledAt: nextAt,
+            publishedAt: null,
+            publishedEventId: null,
+            serverEventId: null,
+            errorMessage: null,
+            recurringCount: post.recurringCount + 1,
+            createdAt: Math.floor(Date.now() / 1000),
+            updatedAt: Math.floor(Date.now() / 1000),
+          };
+          updatePost(newPost);
+          console.log(`[Scheduler] Recurring: next publish at ${new Date(nextAt * 1000).toISOString()}`);
+          toast({
+            title: 'Recurring post rescheduled',
+            description: `Next publish in ${Math.round(post.recurringInterval / 3600)} hours.`,
+          });
+        }
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       markFailed(post.id, msg);

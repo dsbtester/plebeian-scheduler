@@ -13,6 +13,9 @@ function migratePost(raw: Record<string, unknown>): SchedulerPost {
     slug: (raw.slug as string) ?? '',
     hashtags: (raw.hashtags as string[]) ?? [],
     serverEventId: (raw.serverEventId as string | null) ?? null,
+    recurringInterval: (raw.recurringInterval as number) ?? 0,
+    recurringCount: (raw.recurringCount as number) ?? 0,
+    recurringLimit: (raw.recurringLimit as number) ?? 0,
     ...raw,
   } as SchedulerPost;
 }

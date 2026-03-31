@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useSeoMeta } from '@unhead/react';
 import { Link } from 'react-router-dom';
+import { nip19 } from 'nostr-tools';
 import {
   FileText,
   CalendarClock,
@@ -21,6 +22,10 @@ import {
   ExternalLink,
   BarChart3,
   Sparkles,
+  Repeat2,
+  Globe,
+  Copy,
+  BookmarkPlus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +35,9 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useScheduler } from '@/contexts/SchedulerContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useBatchEngagement, type PostEngagement } from '@/hooks/usePostEngagement';
+import { useToast } from '@/hooks/useToast';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { SchedulerPost } from '@/lib/types';
@@ -116,8 +123,10 @@ export default function Dashboard() {
     description: 'Manage your scheduled Nostr posts and track engagement.',
   });
 
-  const { posts, stats } = useScheduler();
+  const { posts, stats, updatePost } = useScheduler();
   const { user } = useCurrentUser();
+  const { mutateAsync: publishEvent } = useNostrPublish();
+  const { toast } = useToast();
 
   // Published posts sorted by most recent
   const publishedPosts = useMemo(() =>
@@ -158,6 +167,71 @@ export default function Dashboard() {
     }
     return { reactions, zaps, sats, uniqueZappers: allZappers.size };
   }, [engagementMap]);
+
+  // Engagement notifications — toast when new zaps/reactions arrive
+  const prevEngagementRef = useRef<{ reactions: number; sats: number }>({ reactions: 0, sats: 0 });
+  useEffect(() => {
+    const prev = prevEngagementRef.current;
+    if (prev.reactions === 0 && prev.sats === 0) {
+      // First load — just store without notifying
+      prevEngagementRef.current = { reactions: totalEngagement.reactions, sats: totalEngagement.sats };
+      return;
+    }
+    const newReactions = totalEngagement.reactions - prev.reactions;
+    const newSats = totalEngagement.sats - prev.sats;
+
+    if (newReactions > 0 || newSats > 0) {
+      const parts: string[] = [];
+      if (newReactions > 0) parts.push(`${newReactions} new reaction${newReactions !== 1 ? 's' : ''}`);
+      if (newSats > 0) parts.push(`⚡ ${formatSats(newSats)} sats`);
+      toast({
+        title: '🔔 New engagement!',
+        description: parts.join(' and '),
+      });
+    }
+    prevEngagementRef.current = { reactions: totalEngagement.reactions, sats: totalEngagement.sats };
+  }, [totalEngagement.reactions, totalEngagement.sats, toast]);
+
+  // Repost (kind 6) a published note
+  const handleRepost = async (post: SchedulerPost) => {
+    if (!user || !post.publishedEventId) return;
+    try {
+      await publishEvent({
+        kind: 6,
+        content: '',
+        tags: [
+          ['e', post.publishedEventId, '', 'mention'],
+          ['p', post.authorPubkey],
+        ],
+      });
+      toast({ title: 'Reposted!', description: 'Your note has been boosted on Nostr.' });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      toast({ title: 'Repost failed', description: msg, variant: 'destructive' });
+    }
+  };
+
+  // Save a published post's content as a reusable template
+  const handleSaveTemplate = (post: SchedulerPost) => {
+    const templates: { name: string; content: string; postType: string; createdAt: number }[] =
+      JSON.parse(localStorage.getItem('plebeian-scheduler:templates') ?? '[]');
+
+    const name = post.postType === 'long' && post.title
+      ? post.title
+      : post.importedListing?.title
+        ? `Promo: ${post.importedListing.title}`
+        : post.content.slice(0, 40) || 'Untitled template';
+
+    templates.push({
+      name,
+      content: post.content,
+      postType: post.postType,
+      createdAt: Math.floor(Date.now() / 1000),
+    });
+
+    localStorage.setItem('plebeian-scheduler:templates', JSON.stringify(templates));
+    toast({ title: 'Template saved!', description: `"${name}" added to your templates.` });
+  };
 
   return (
     <div className="space-y-8 animate-fade-in overflow-hidden">
@@ -356,6 +430,44 @@ export default function Dashboard() {
               </Card>
             </Link>
           )}
+
+          {/* Best time to post insight */}
+          {publishedPosts.length >= 3 && engagementMap && engagementMap.size > 0 && (() => {
+            // Analyze: which hour of day had the most engagement
+            const hourBuckets: Record<number, number> = {};
+            for (const post of publishedPosts) {
+              if (!post.publishedAt || !post.publishedEventId) continue;
+              const eng = engagementMap.get(post.publishedEventId);
+              if (!eng) continue;
+              const hour = new Date(post.publishedAt * 1000).getHours();
+              const score = eng.reactionCount + (eng.zapCount * 3); // Weight zaps higher
+              hourBuckets[hour] = (hourBuckets[hour] || 0) + score;
+            }
+            const entries = Object.entries(hourBuckets).map(([h, s]) => ({ hour: parseInt(h), score: s }));
+            if (entries.length === 0) return null;
+            entries.sort((a, b) => b.score - a.score);
+            const best = entries[0];
+            const bestHour = best.hour;
+            const ampm = bestHour >= 12 ? 'PM' : 'AM';
+            const h12 = bestHour % 12 || 12;
+
+            return (
+              <Card className="bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 border-violet-500/15">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-violet-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Best time to post</p>
+                      <p className="text-lg font-bold font-display">{h12}:00 {ampm}</p>
+                      <p className="text-[10px] text-muted-foreground">Based on your engagement data</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
 
         {/* RIGHT COLUMN — Published posts with engagement (3/5 width) */}
@@ -448,18 +560,56 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between pt-1">
                             <EngagementRow engagement={engagement} isLoading={engagementLoading} />
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               {post.publishedEventId && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Link to={`/compose?edit=${post.id}`}>
-                                      <Button variant="ghost" size="icon" className="w-7 h-7">
-                                        <ExternalLink className="w-3.5 h-3.5" />
+                                <>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href={`https://njump.me/${nip19.noteEncode(post.publishedEventId)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        <Button variant="ghost" size="icon" className="w-7 h-7">
+                                          <Globe className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs">View on Nostr</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="w-7 h-7"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          handleRepost(post);
+                                        }}
+                                      >
+                                        <Repeat2 className="w-3.5 h-3.5" />
                                       </Button>
-                                    </Link>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">View details</TooltipContent>
-                                </Tooltip>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs">Repost / boost</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="w-7 h-7"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          handleSaveTemplate(post);
+                                        }}
+                                      >
+                                        <BookmarkPlus className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs">Save as template</TooltipContent>
+                                  </Tooltip>
+                                </>
                               )}
                             </div>
                           </div>

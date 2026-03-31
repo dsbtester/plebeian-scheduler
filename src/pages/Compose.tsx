@@ -21,6 +21,8 @@ import {
   Upload,
   Hash,
   Eye,
+  BookOpen,
+  Repeat2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,7 +54,7 @@ import { useUploadFile } from '@/hooks/useUploadFile';
 import { useToast } from '@/hooks/useToast';
 import { buildEvent } from '@/lib/eventBuilder';
 import { scheduleEvent } from '@/lib/schedulerApi';
-import { createNewPost, type SchedulerPost, type PostType, type ImportedListing, type UploadedImage } from '@/lib/types';
+import { createNewPost, type SchedulerPost, type PostType, type PostTemplate, type ImportedListing, type UploadedImage } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -89,6 +91,15 @@ export default function Compose() {
     if (existingPost) return existingPost;
     return createNewPost(user?.pubkey ?? '');
   });
+
+  // Load templates
+  const templates = useMemo<PostTemplate[]>(() => {
+    try {
+      const raw = localStorage.getItem('plebeian-scheduler:templates');
+      if (!raw) return [];
+      return (JSON.parse(raw) as PostTemplate[]).sort((a, b) => b.createdAt - a.createdAt);
+    } catch { return []; }
+  }, []);
 
   const [persisted, setPersisted] = useState(!!editId);
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(() => {
@@ -380,6 +391,38 @@ export default function Compose() {
           );
         })}
       </div>
+
+      {/* Template selector — only show if templates exist and not editing */}
+      {!editId && templates.length > 0 && (
+        <Card className="bg-muted/30">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="text-xs font-medium text-muted-foreground">Load from template</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {templates.slice(0, 6).map((tpl, i) => (
+                <Button
+                  key={`${tpl.name}-${i}`}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 gap-1.5"
+                  onClick={() => {
+                    setPost(prev => ({
+                      ...prev,
+                      content: tpl.content,
+                      postType: (tpl.postType as PostType) || prev.postType,
+                    }));
+                    toast({ title: 'Template loaded', description: `"${tpl.name}" applied.` });
+                  }}
+                >
+                  {tpl.name.slice(0, 25)}{tpl.name.length > 25 ? '...' : ''}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Promo: Listing Browser */}
       {post.postType === 'promo' && (
@@ -783,6 +826,35 @@ export default function Compose() {
                       className="flex-1"
                     />
                   </div>
+                </div>
+
+                {/* Recurring option */}
+                <Separator />
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Repeat</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: 'Once', value: 0 },
+                      { label: 'Daily', value: 86400 },
+                      { label: 'Every 3 days', value: 86400 * 3 },
+                      { label: 'Weekly', value: 604800 },
+                    ].map(opt => (
+                      <Button
+                        key={opt.value}
+                        size="sm"
+                        variant={post.recurringInterval === opt.value ? 'default' : 'outline'}
+                        className="text-xs h-8"
+                        onClick={() => updateField('recurringInterval', opt.value)}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                  {post.recurringInterval > 0 && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Will auto-reschedule after each publish
+                    </p>
+                  )}
                 </div>
 
                 <Button
