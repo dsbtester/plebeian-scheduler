@@ -160,7 +160,7 @@ export default function Dashboard() {
   }, [engagementMap]);
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in overflow-hidden">
       {/* ===== HEADER ===== */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -178,71 +178,71 @@ export default function Dashboard() {
       </div>
 
       {/* ===== HERO STATS — 4 key numbers ===== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Card className="group hover:shadow-md transition-all duration-200 hover:border-primary/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Scheduled</p>
-                <p className="text-3xl font-bold font-display mt-1">{stats.scheduled}</p>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">Scheduled</p>
+                <p className="text-2xl sm:text-3xl font-bold font-display mt-1">{stats.scheduled}</p>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <CalendarClock className="w-5 h-5 text-primary" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <CalendarClock className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="group hover:shadow-md transition-all duration-200 hover:border-emerald-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Published</p>
-                <p className="text-3xl font-bold font-display mt-1">{stats.published}</p>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">Published</p>
+                <p className="text-2xl sm:text-3xl font-bold font-display mt-1">{stats.published}</p>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="group hover:shadow-md transition-all duration-200 hover:border-rose-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Reactions</p>
-                <p className="text-3xl font-bold font-display mt-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">Reactions</p>
+                <p className="text-2xl sm:text-3xl font-bold font-display mt-1">
                   {engagementLoading ? <Skeleton className="h-9 w-12 inline-block" /> : totalEngagement.reactions}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-rose-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Heart className="w-5 h-5 text-rose-500" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-rose-500/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="group hover:shadow-md transition-all duration-200 hover:border-amber-500/20">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Zapped</p>
-                <p className="text-3xl font-bold font-display mt-1">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider">Zapped</p>
+                <p className="text-2xl sm:text-3xl font-bold font-display mt-1">
                   {engagementLoading ? (
                     <Skeleton className="h-9 w-20 inline-block" />
                   ) : totalEngagement.sats > 0 ? (
-                    <span className="flex items-center gap-1.5">
-                      <Zap className="w-5 h-5 text-amber-500 fill-amber-500/20" />
-                      {formatSats(totalEngagement.sats)}
+                    <span className="flex items-center gap-1">
+                      <Zap className="w-4 h-4 text-amber-500 fill-amber-500/20 shrink-0" />
+                      <span className="truncate">{formatSats(totalEngagement.sats)}</span>
                     </span>
                   ) : (
                     '0'
                   )}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Zap className="w-5 h-5 text-amber-500" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
               </div>
             </div>
           </CardContent>
@@ -274,7 +274,7 @@ export default function Dashboard() {
       )}
 
       {/* ===== TWO-COLUMN: UPCOMING + PUBLISHED WITH ENGAGEMENT ===== */}
-      <div className="grid lg:grid-cols-5 gap-6">
+      <div className="grid lg:grid-cols-5 gap-4 sm:gap-6">
 
         {/* LEFT COLUMN — Upcoming Schedule (2/5 width) */}
         <div className="lg:col-span-2 space-y-4">
@@ -329,7 +329,7 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
-                      <Badge variant="outline" className="text-[10px] shrink-0 h-5">
+                      <Badge variant="outline" className="text-[10px] shrink-0 h-5 hidden sm:inline-flex">
                         {post.scheduledAt && formatDistanceToNow(new Date(post.scheduledAt * 1000), { addSuffix: true })}
                       </Badge>
                     </Link>
@@ -403,20 +403,20 @@ export default function Dashboard() {
                     )}
                   >
                     <CardContent className="p-0">
-                      <div className="flex">
-                        {/* Image thumbnail */}
+                      <div className="flex min-w-0">
+                        {/* Image thumbnail — hidden on very small screens if content is tight */}
                         {hasImage && firstImage && (
-                          <div className="w-20 sm:w-28 shrink-0 bg-muted">
+                          <div className="w-16 sm:w-28 shrink-0 bg-muted">
                             <img
                               src={firstImage}
                               alt=""
-                              className="w-full h-full object-cover min-h-[80px]"
+                              className="w-full h-full object-cover min-h-[72px]"
                             />
                           </div>
                         )}
 
                         {/* Content */}
-                        <div className="flex-1 p-3 sm:p-4 min-w-0 space-y-2">
+                        <div className="flex-1 p-3 sm:p-4 min-w-0 space-y-1.5 overflow-hidden">
                           <div className="flex items-start gap-2">
                             <div className={cn(
                               'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
