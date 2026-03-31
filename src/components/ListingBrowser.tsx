@@ -28,8 +28,15 @@ import { cn } from '@/lib/utils';
 import type { NostrMetadata } from '@nostrify/nostrify';
 import { PLEBEIAN_MARKET_URL, type ImportedListing, type UploadedImage } from '@/lib/types';
 
+export interface CampaignListing {
+  content: string;
+  media: UploadedImage[];
+  importedListing: ImportedListing;
+}
+
 interface ListingBrowserProps {
   onImport: (data: { content: string; media: UploadedImage[]; importedListing: ImportedListing }) => void;
+  onCampaign?: (listings: CampaignListing[]) => void;
 }
 
 type BrowseMode = 'mine' | 'all';
@@ -210,11 +217,13 @@ function ListingSkeletons() {
   );
 }
 
-export function ListingBrowser({ onImport }: ListingBrowserProps) {
+export function ListingBrowser({ onImport, onCampaign }: ListingBrowserProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<BrowseMode>('mine');
   const [searchTerm, setSearchTerm] = useState('');
   const [allSearchInput, setAllSearchInput] = useState('');
+  const [campaignMode, setCampaignMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { user } = useCurrentUser();
 
   const { data: myListings, isLoading: myLoading } = useMyListings();
@@ -255,6 +264,15 @@ export function ListingBrowser({ onImport }: ListingBrowserProps) {
     });
   }, [onImport]);
 
+  const toggleSelection = useCallback((eventId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+  }, []);
+
   const handleAllSearch = useCallback(() => {
     setSearchTerm(allSearchInput);
   }, [allSearchInput]);
@@ -274,6 +292,38 @@ export function ListingBrowser({ onImport }: ListingBrowserProps) {
 
   const currentListings = mode === 'mine' ? filteredMyListings : (allListings ?? []);
   const isLoading = mode === 'mine' ? myLoading : allLoading;
+
+  const handleCreateCampaign = useCallback(() => {
+    if (!onCampaign) return;
+    const selected = currentListings.filter(l => selectedIds.has(l.event.id));
+    const campaignListings: CampaignListing[] = selected.map(listing => {
+      const promoContent = buildPromoContent(listing);
+      const media: UploadedImage[] = listing.images.map(img => ({
+        url: img.url,
+        dimensions: img.dimensions,
+      }));
+      const naddr = buildNaddr(listing);
+      return {
+        content: promoContent,
+        media,
+        importedListing: {
+          naddr,
+          marketplaceUrl: `${PLEBEIAN_MARKET_URL}/products/${listing.event.id}`,
+          title: listing.title,
+          summary: listing.summary,
+          price: listing.price,
+          currency: listing.currency || 'SAT',
+          location: listing.location,
+          categories: listing.categories,
+          images: media,
+          authorPubkey: listing.event.pubkey,
+        },
+      };
+    });
+    onCampaign(campaignListings);
+    setCampaignMode(false);
+    setSelectedIds(new Set());
+  }, [onCampaign, currentListings, selectedIds]);
 
   return (
     <Card className={cn('transition-all duration-300', isOpen && 'ring-1 ring-primary/20')}>
@@ -341,6 +391,27 @@ export function ListingBrowser({ onImport }: ListingBrowserProps) {
             </button>
           </div>
 
+          {/* Campaign mode toggle */}
+          {onCampaign && mode === 'mine' && (myListings?.length ?? 0) > 1 && (
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => { setCampaignMode(!campaignMode); setSelectedIds(new Set()); }}
+                className={cn(
+                  'text-xs font-medium transition-colors',
+                  campaignMode ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {campaignMode ? '✓ Campaign mode' : '📢 Select multiple for campaign'}
+              </button>
+              {campaignMode && selectedIds.size > 0 && (
+                <Button size="sm" className="text-xs h-7 gap-1.5" onClick={handleCreateCampaign}>
+                  Create campaign ({selectedIds.size})
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Search bar */}
           <div className="relative flex gap-2">
             <div className="relative flex-1">
@@ -405,12 +476,23 @@ export function ListingBrowser({ onImport }: ListingBrowserProps) {
             ) : (
               <div className="space-y-1.5">
                 {currentListings.map(listing => (
-                  <ListingCard
-                    key={listing.event.id}
-                    listing={listing}
-                    onImport={() => handleImportListing(listing)}
-                    showAuthor={mode === 'all'}
-                  />
+                  <div key={listing.event.id} className="flex items-center gap-2">
+                    {campaignMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(listing.event.id)}
+                        onChange={() => toggleSelection(listing.event.id)}
+                        className="w-4 h-4 rounded border-border text-primary accent-primary shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <ListingCard
+                        listing={listing}
+                        onImport={() => campaignMode ? toggleSelection(listing.event.id) : handleImportListing(listing)}
+                        showAuthor={mode === 'all'}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

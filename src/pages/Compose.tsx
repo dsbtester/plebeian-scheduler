@@ -44,7 +44,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ImageUploader } from '@/components/ImageUploader';
-import { ListingBrowser } from '@/components/ListingBrowser';
+import { ListingBrowser, type CampaignListing } from '@/components/ListingBrowser';
 import { AiGenerateDialog } from '@/components/AiGenerateDialog';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { useScheduler } from '@/contexts/SchedulerContext';
@@ -298,6 +298,30 @@ export default function Compose() {
     toast({ title: 'Content inserted', description: 'AI-generated text added.' });
   }, [toast]);
 
+  // Multi-listing campaign — create scheduled promo posts spread across time
+  const handleCampaign = useCallback((listings: CampaignListing[]) => {
+    if (!user || listings.length === 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    const interval = 6 * 3600; // 6 hours apart by default
+
+    for (let i = 0; i < listings.length; i++) {
+      const item = listings[i];
+      const newPost = createNewPost(user.pubkey, 'promo');
+      newPost.content = item.content;
+      newPost.media = item.media;
+      newPost.importedListing = item.importedListing;
+      newPost.status = 'scheduled';
+      newPost.scheduledAt = now + (interval * (i + 1));
+      updatePost(newPost);
+    }
+
+    toast({
+      title: `Campaign created!`,
+      description: `${listings.length} promo notes scheduled, one every 6 hours.`,
+    });
+    navigate('/');
+  }, [user, updatePost, toast, navigate]);
+
   // Upload header image for articles
   const handleHeaderImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -426,7 +450,7 @@ export default function Compose() {
 
       {/* Promo: Listing Browser */}
       {post.postType === 'promo' && (
-        <ListingBrowser onImport={handleImport} />
+        <ListingBrowser onImport={handleImport} onCampaign={handleCampaign} />
       )}
 
       {/* Imported listing reference */}
