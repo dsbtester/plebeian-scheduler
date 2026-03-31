@@ -633,44 +633,48 @@ export default function Compose() {
         </CardContent>
       </Card>
 
-      {/* ===== INLINE PREVIEW (images beneath the content) ===== */}
-      {post.media.length > 0 && (
+      {/* ===== NOTE PREVIEW (short + promo posts) ===== */}
+      {post.postType !== 'long' && (post.content || post.media.length > 0) && (
         <Card className="bg-secondary/30 border-dashed">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
               <Eye className="w-3.5 h-3.5" />
-              Post Preview
+              Note Preview
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Content preview */}
-            <div className="text-sm whitespace-pre-wrap break-words">
-              {post.content || <span className="text-muted-foreground italic">No content yet...</span>}
-            </div>
+            {post.content ? (
+              <div className="text-sm whitespace-pre-wrap break-words">{post.content}</div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">Start typing to see a preview...</p>
+            )}
 
             {/* Image gallery preview */}
-            <div className={cn(
-              'grid gap-2',
-              post.media.length === 1 && 'grid-cols-1',
-              post.media.length === 2 && 'grid-cols-2',
-              post.media.length >= 3 && 'grid-cols-2 sm:grid-cols-3',
-            )}>
-              {post.media.map((img, idx) => (
-                <div
-                  key={img.url}
-                  className={cn(
-                    'relative rounded-lg overflow-hidden border bg-muted',
-                    post.media.length === 1 ? 'aspect-video' : 'aspect-square',
-                  )}
-                >
-                  <img
-                    src={img.url}
-                    alt={img.alt || `Image ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
-            </div>
+            {post.media.length > 0 && (
+              <div className={cn(
+                'grid gap-2',
+                post.media.length === 1 && 'grid-cols-1',
+                post.media.length === 2 && 'grid-cols-2',
+                post.media.length >= 3 && 'grid-cols-2 sm:grid-cols-3',
+              )}>
+                {post.media.map((img, idx) => (
+                  <div
+                    key={img.url}
+                    className={cn(
+                      'relative rounded-lg overflow-hidden border bg-muted',
+                      post.media.length === 1 ? 'aspect-video' : 'aspect-square',
+                    )}
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.alt || `Image ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
