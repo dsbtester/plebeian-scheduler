@@ -94,6 +94,7 @@ function blobHeaders(ctx) {
 
 async function blobSet(ctx, key, value) {
   const url = blobUrl(ctx, key);
+  console.log(`[Blobs] SET ${url}`);
   const res = await fetch(url, {
     method: "PUT",
     headers: blobHeaders(ctx),
@@ -101,21 +102,29 @@ async function blobSet(ctx, key, value) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(`[Blobs] SET failed (${res.status}): ${text}`);
     throw new Error(`Blob SET failed (${res.status}): ${text}`);
   }
+  console.log(`[Blobs] SET OK for key: ${key}`);
 }
 
 async function blobGet(ctx, key) {
   const url = blobUrl(ctx, key);
+  console.log(`[Blobs] GET ${url}`);
   const res = await fetch(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${ctx.token}` },
   });
-  if (res.status === 404) return null;
+  if (res.status === 404) {
+    console.log(`[Blobs] GET 404 for key: ${key}`);
+    return null;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(`[Blobs] GET failed (${res.status}): ${text}`);
     throw new Error(`Blob GET failed (${res.status}): ${text}`);
   }
+  console.log(`[Blobs] GET OK for key: ${key}`);
   return res.json();
 }
 
@@ -133,6 +142,7 @@ async function blobDelete(ctx, key) {
 
 async function blobList(ctx) {
   const url = blobUrl(ctx, null);
+  console.log(`[Blobs] LIST ${url}`);
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -142,9 +152,11 @@ async function blobList(ctx) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(`[Blobs] LIST failed (${res.status}): ${text}`);
     throw new Error(`Blob LIST failed (${res.status}): ${text}`);
   }
   const data = await res.json();
+  console.log(`[Blobs] LIST found ${(data.blobs || []).length} entries`);
   return data.blobs || [];
 }
 
@@ -243,14 +255,77 @@ export const handler = async (event, context) => {
 
   const blobCtx = getBlobsContext();
   const id = event.queryStringParameters?.id || null;
+  const action = event.queryStringParameters?.action || null;
+  const cronKey = event.queryStringParameters?.key || null;
 
   // ── GET without id: health check (works even without storage) ──
-  if (method === "GET" && !id) {
+  if (method === "GET" && !id && action !== "cron") {
     return lambdaResponse({
       ok: true,
       service: "plebeian-scheduler",
       storage: blobCtx ? "connected" : "not configured",
       method: blobCtx ? "ready" : "none",
+    });
+  }
+
+  // ── GET with action=cron: external cron trigger ──
+  // URL: /.netlify/functions/scheduler?action=cron&key=YOUR_CRON_SECRET
+  if (method === "GET" && action === "cron") {
+    const expectedKey = process.env.CRON_SECRET;
+    if (!expectedKey || cronKey !== expectedKey) {
+      return lambdaResponse({ error: "Unauthorized" }, 401);
+    }
+
+    if (!blobCtx) {
+      return lambdaResponse({ error: "Storage not configured" }, 500);
+    }
+
+    console.log("[Scheduler Cron] Triggered by external cron service...");
+
+    const now = Math.floor(Date.now() / 1000);
+    let publishedCount = 0;
+    let checkedCount = 0;
+
+    try {
+      const blobs = await blobList(blobCtx);
+      checkedCount = blobs.length;
+
+      for (const blob of blobs) {
+        const record = await blobGet(blobCtx, blob.key);
+        if (!record || record.status !== "pending") continue;
+        if (record.publishAt > now) continue;
+
+        console.log(`[Scheduler Cron] Publishing event ${blob.key} (due at ${new Date(record.publishAt * 1000).toISOString()})...`);
+
+        try {
+          const results = await publishToRelays(record.signedEvent, record.relays);
+          const anySuccess = results.some((r) => r.ok);
+
+          record.status = anySuccess ? "published" : "failed";
+          record.publishedAt = Math.floor(Date.now() / 1000);
+          record.results = results;
+
+          await blobSet(blobCtx, blob.key, record);
+          publishedCount++;
+
+          console.log(`[Scheduler Cron] Event ${blob.key}: ${record.status}`, JSON.stringify(results));
+        } catch (err) {
+          console.error(`[Scheduler Cron] Failed to publish ${blob.key}:`, err);
+          record.status = "failed";
+          record.results = [{ error: String(err.message || err) }];
+          await blobSet(blobCtx, blob.key, record);
+        }
+      }
+    } catch (err) {
+      console.error("[Scheduler Cron] Error listing blobs:", err);
+      return lambdaResponse({ error: String(err.message || err) }, 500);
+    }
+
+    return lambdaResponse({
+      ok: true,
+      checked: checkedCount,
+      published: publishedCount,
+      timestamp: new Date().toISOString(),
     });
   }
 
